@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-14-pi-ai-final-payload-output-cap-omission.md
+2026-08-14-pi-ai-final-payload-output-cap-omission.md: 9b92bb60f6ae27c5f74ad1614b8ef9b46e360cd3
+2026-08-14-pi-ai-final-payload-output-cap-omission.zh.md: 368469f14dac24bdb4e91365e8c5cdab6fdc8dd9

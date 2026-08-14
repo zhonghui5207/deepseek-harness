@@ -32,7 +32,7 @@ Status: implemented
 
 插件通过一次全有或全无调用，将所有已配置的提供方名称注册到同一个 `PiAiAdapter`。请求按 provider 选择对应配置，并在 `getModels(provider)` 中查找模型以取得目录描述符。未知提供方会在插件加载时失败；未知模型会在网络 I/O 前以 `UNKNOWN_MODEL` 失败。适配器不会修改目录对象。当配置提供 `baseURL` 时，适配器复制选中的描述符，仅覆盖 `baseUrl`，使私有端点保留 pi-ai 的 API、能力、兼容标志、上下文限制与推理映射。私有端点必须实现所选提供方的协议，模型 ID 也仍须存在于已安装的 pi-ai 目录中。
 
-适配器调用 pi-ai 的 `streamSimple()`，因此每个目录模型会选择其注册的 API 实现；描述符为 `openai-responses` 时使用 OpenAI Responses，而非 Chat Completions。Harness 的 temperature、最大 token 数、signal、session ID，以及提供方配置中的通用流选项均直接传递。配置 headers 与 Harness 强制归因 headers 合并；发生保留名称冲突时，以 Harness 归因为准。适配器不再维护 DeepSeek 专用 payload 重写或提供方协议矩阵。
+适配器调用 pi-ai 的 `streamSimple()`，因此每个目录模型会选择其注册的 API 实现；描述符为 `openai-responses` 时使用 OpenAI Responses，而非 Chat Completions。Harness 的 temperature、最大 token 数、signal、session ID，以及提供方配置中的通用流选项均直接传递，但精确模型可以在 pi-ai 构造最终 payload 后[省略 Responses 输出上限字段](../bug-fix/2026-08-14-pi-ai-final-payload-output-cap-omission.md)。配置 headers 与 Harness 强制归因 headers 合并；发生保留名称冲突时，以 Harness 归因为准。适配器不再维护 DeepSeek 专用 payload 重写或提供方协议矩阵。
 
 pi-ai 的通用流选项不支持停止序列。若 Harness `stop` 选项已定义，`dsh-llm-pi-ai` 会以 `UNSUPPORTED_OPTION` 拒绝请求，不会静默忽略，也不会增加第二套提供方专用 payload 实现。`dsh-llm-deepseek` 继续通过原生请求序列化器支持 `stop`。
 
