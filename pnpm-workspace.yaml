@@ -39,6 +39,9 @@ peerDependencyRules:
 # (git hooks) genuinely need theirs.
 allowBuilds:
   esbuild: true
+  # Electron downloads its runtime binary in a postinstall; the desktop shell
+  # needs it to launch.
+  electron: true
   lefthook: true
   # Cross-platform boundary for the persistent PTY backend, including ConPTY on Windows.
   node-pty: true
