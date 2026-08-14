@@ -51,7 +51,9 @@ The renderer is sandboxed and connects only to a loopback server owned by the De
 
 ## Updating
 
-Each published version is built and smoke-tested independently for macOS, Windows, and Linux. Install a newer [GitHub Release](https://github.com/zhonghui5207/deepseek-harness-desktop/releases) to update; the application does not silently replace itself.
+Each published version is built and smoke-tested independently for macOS, Windows, and Linux. Desktop checks the repository's visible Latest Release after startup and prompts only when it finds a newer version. Use **Help → Check for Updates…** to check manually at any time.
+
+**Download Update** opens the release page in the operating-system browser. The application never downloads or replaces itself silently; install the selected package through the normal platform flow. Fully automatic installation remains deferred until the packages are signed and notarized.
 
 <a id="run-from-source"></a>
 

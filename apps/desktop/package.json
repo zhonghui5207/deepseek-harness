@@ -123,9 +123,11 @@
     "@deepseek-ai/dsh-web-app": "workspace:^",
     "@deepseek-ai/dsh-workflow": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
-    "node-addon-require-builtin": "^0.1.4"
+    "node-addon-require-builtin": "^0.1.4",
+    "semver": "^7.8.5"
   },
   "devDependencies": {
+    "@types/semver": "^7.8.0",
     "electron": "^43.4.0",
     "electron-builder": "26.15.3"
   }

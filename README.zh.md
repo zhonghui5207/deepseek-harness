@@ -51,7 +51,9 @@ renderer 运行在沙箱中，只连接 Desktop 进程持有的回环服务器�
 
 ## 更新
 
-每个发布版本都会分别为 macOS、Windows 与 Linux 构建并执行冒烟测试。安装较新的 [GitHub Release](https://github.com/zhonghui5207/deepseek-harness-desktop/releases) 即可更新；应用不会静默替换自身。
+每个发布版本都会分别为 macOS、Windows 与 Linux 构建并执行冒烟测试。Desktop 启动后会检查仓库中公开可见的 Latest Release，只有发现较新版本时才会提示。你也可以随时使用**帮助 → 检查更新…**手动检查。
+
+点击**下载更新**会在操作系统浏览器中打开发布页面。应用不会静默下载或替换自身；请通过平台的常规流程安装所选安装包。安装包完成签名与公证前，不启用全自动安装。
 
 <a id="run-from-source"></a>
 

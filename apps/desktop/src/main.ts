@@ -5,11 +5,26 @@
  * @module @deepseek-ai/dsh-desktop/main
  */
 
-import { app, BrowserWindow, dialog, shell } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  Menu,
+  shell,
+  type MessageBoxOptions,
+  type MessageBoxReturnValue,
+} from 'electron'
 import type { Context } from '@deepseek-ai/cordis'
 import { bootDesktop, type DesktopRuntime } from './boot.ts'
 import { createDesktopShutdown, exitsAfterLastWindow } from './lifecycle.ts'
 import { isApplicationNavigation, isExternalWebUrl } from './navigation.ts'
+import {
+  checkForDesktopUpdate,
+  createDesktopMenuTemplate,
+  DESKTOP_RELEASES_URL,
+  desktopUpdateCopy,
+  type DesktopUpdateResult,
+} from './update.ts'
 
 /** Internal packaged-entry probe used by the keyless snapshot and release jobs. */
 const SMOKE_FLAG = '--dsh-desktop-smoke'
@@ -20,6 +35,9 @@ let runtimeTask: Promise<DesktopRuntime> | undefined
 let applicationUrl: string | undefined
 let mainWindow: BrowserWindow | undefined
 let quitting = false
+let updateLookup: Promise<DesktopUpdateResult> | undefined
+let notifyWhenCurrent = false
+let startupUpdateCheckRequested = false
 
 /** Session-create response fields consumed by the packaged smoke. */
 type SmokeSessionCreateResponse =
@@ -67,6 +85,92 @@ function openExternal(targetUrl: string): void {
   })
 }
 
+function showMessageBox(options: MessageBoxOptions): Promise<MessageBoxReturnValue> {
+  const window = mainWindow
+  if (window === undefined || window.isDestroyed()) return dialog.showMessageBox(options)
+  return dialog.showMessageBox(window, options)
+}
+
+async function presentUpdateResult(result: DesktopUpdateResult, showCurrentStatus: boolean): Promise<void> {
+  if (quitting) return
+  const copy = desktopUpdateCopy(app.getLocale())
+  switch (result.kind) {
+    case 'update-available': {
+      const selection = await showMessageBox({
+        type: 'info',
+        title: copy.updateAvailableTitle,
+        message: copy.updateAvailableMessage(result.latestVersion),
+        detail: copy.updateAvailableDetail(result.currentVersion),
+        buttons: [copy.downloadUpdate, copy.later],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      })
+      if (selection.response === 0) openExternal(result.releaseUrl)
+      return
+    }
+    case 'up-to-date':
+      if (showCurrentStatus) {
+        await showMessageBox({
+          type: 'info',
+          title: copy.upToDateTitle,
+          message: copy.upToDateMessage(result.currentVersion),
+          buttons: [copy.ok],
+          defaultId: 0,
+        })
+      }
+      return
+    case 'unavailable':
+      console.warn('desktop update check unavailable:', result.reason)
+      if (showCurrentStatus) {
+        await showMessageBox({
+          type: 'warning',
+          title: copy.checkFailedTitle,
+          message: copy.checkFailedMessage,
+          buttons: [copy.ok],
+          defaultId: 0,
+        })
+      }
+      return
+    default: {
+      const unexpected: never = result
+      throw new Error(`unknown Desktop update result: ${JSON.stringify(unexpected)}`)
+    }
+  }
+}
+
+function requestUpdateCheck(showCurrentStatus: boolean): void {
+  if (showCurrentStatus) startupUpdateCheckRequested = true
+  notifyWhenCurrent ||= showCurrentStatus
+  if (updateLookup !== undefined) return
+  const lookup = checkForDesktopUpdate(app.getVersion())
+  updateLookup = lookup
+  void (async () => {
+    try {
+      const result = await lookup
+      if (updateLookup === lookup) updateLookup = undefined
+      const shouldShowCurrentStatus = notifyWhenCurrent
+      notifyWhenCurrent = false
+      await presentUpdateResult(result, shouldShowCurrentStatus)
+    } catch (error) {
+      if (updateLookup === lookup) updateLookup = undefined
+      notifyWhenCurrent = false
+      console.error('desktop update presentation failed:', error)
+    }
+  })()
+}
+
+function installApplicationMenu(): void {
+  const copy = desktopUpdateCopy(app.getLocale())
+  const template = createDesktopMenuTemplate(
+    process.platform,
+    copy,
+    () => { requestUpdateCheck(true) },
+    () => { openExternal(DESKTOP_RELEASES_URL) },
+  )
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
 /** Create the single renderer window and confine navigation to the booted application origin. */
 function createWindow(url: string): BrowserWindow {
   const window = new BrowserWindow({
@@ -91,12 +195,18 @@ function createWindow(url: string): BrowserWindow {
     event.preventDefault()
     openExternal(targetUrl)
   })
-  void window.loadURL(url).catch((error: unknown) => {
-    const detail = formatFailure(error)
-    console.error('desktop renderer failed to load:', detail)
-    dialog.showErrorBox('DSH Desktop failed to load', detail)
-    requestQuit(1)
-  })
+  void window.loadURL(url)
+    .then(() => {
+      if (startupUpdateCheckRequested || quitting || window.isDestroyed()) return
+      startupUpdateCheckRequested = true
+      requestUpdateCheck(false)
+    })
+    .catch((error: unknown) => {
+      const detail = formatFailure(error)
+      console.error('desktop renderer failed to load:', detail)
+      dialog.showErrorBox('DSH Desktop failed to load', detail)
+      requestQuit(1)
+    })
   window.on('closed', () => {
     if (mainWindow === window) mainWindow = undefined
   })
@@ -160,6 +270,7 @@ process.on('SIGINT', () => {
 
 async function launch(): Promise<void> {
   try {
+    installApplicationMenu()
     runtimeTask = bootDesktop({ requestExit: requestQuit })
     const runtime = await runtimeTask
     root = runtime.context
@@ -187,6 +298,8 @@ async function launch(): Promise<void> {
       }
       const response = await fetch(runtime.url)
       const html = await response.text()
+      const englishUpdateCopy = desktopUpdateCopy('en-US')
+      const chineseUpdateCopy = desktopUpdateCopy('zh-CN')
       process.stdout.write(`dsh desktop smoke: ${JSON.stringify({
         status: response.status,
         contentType: response.headers.get('content-type'),
@@ -194,6 +307,13 @@ async function launch(): Promise<void> {
         loopback: new URL(runtime.url).hostname === '127.0.0.1',
         agentPresetIds: runtime.agentPresetIds,
         createdPresets,
+        updateCheck: {
+          releasesUrl: DESKTOP_RELEASES_URL,
+          menuLabels: {
+            en: englishUpdateCopy.checkForUpdates,
+            zh: chineseUpdateCopy.checkForUpdates,
+          },
+        },
       })}\n`)
       requestQuit(response.ok && html.includes('__DSH_BOOT__') ? 0 : 1)
       return
