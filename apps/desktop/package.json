@@ -2,7 +2,7 @@
   "name": "@deepseek-ai/dsh-desktop",
   "description": "Electron desktop shell for the DeepSeek Harness web GUI: boots the web profile in-process and loads the SPA in a window",
   "desktopName": "dsh-desktop",
-  "version": "0.1.0-rc.5",
+  "version": "0.1.0-rc.6",
   "publishConfig": {
     "access": "public"
   },
