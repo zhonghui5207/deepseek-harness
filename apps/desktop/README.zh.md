@@ -29,7 +29,7 @@ pnpm --filter @deepseek-ai/dsh-desktop run dist
 
 ## 分发与仓库归属
 
-[`Desktop Release`](../../.github/workflows/desktop-release.yml) 会构建原生 macOS、Windows、Linux 预览版，对每个未封装应用做冒烟验证，再上传安装包与归档。`desktop-v*` tag 还会把这些文件发布到本仓库的 GitHub Releases，并标记为 prerelease；手动运行 workflow 只生成可下载的 workflow artifact。
+[`Desktop Release`](../../.github/workflows/desktop-release.yml) 会构建原生 macOS、Windows 与 Linux 安装包，对每个未封装应用做冒烟测试，再上传安装包与归档。`desktop-v<version>` tag 必须与本包 manifest 中的版本完全一致；所有原生任务通过后，工作流会把这些文件和 `SHA256SUMS.txt` 发布为仓库中可见的 Latest Release。手动运行工作流只生成可下载的工作流产物。
 
 Desktop 目前保留在本 monorepo。它的 profile 组合包、客户端模块、Loader 行为和发布版本都随 Harness 核心一起变化；此时拆分独立仓库只会复制依赖 manifest，并要求每次兼容性变更跨仓库协调，却没有形成稳定边界。只有当 Desktop 能消费带版本的公共 runtime／carrier API，并产生真正独立的发布节奏时，才值得拆分。
 

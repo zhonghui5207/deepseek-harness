@@ -1,5 +1,5 @@
-# Build installable Desktop previews on demand and publish the exact matrix
-# artifacts when the workflow runs from a desktop-v* tag.
+# Build installable Desktop packages on demand and publish the exact matrix
+# after a version-matched desktop-v* tag passes every packaged smoke.
 name: Desktop Release
 
 on:
@@ -21,8 +21,40 @@ env:
   CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
 jobs:
+  plan:
+    name: Plan Desktop release
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Verify release version
+        id: version
+        shell: bash
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          version=$(node -p "require('./apps/desktop/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$REF_TYPE" == 'tag' ]]; then
+            expected="desktop-v$version"
+            if [[ "$REF_NAME" != "$expected" ]]; then
+              echo "Desktop release tag '$REF_NAME' must match app version '$expected'." >&2
+              exit 1
+            fi
+          fi
+
   build:
     name: Build ${{ matrix.label }}
+    needs: plan
     strategy:
       fail-fast: false
       matrix:
@@ -96,7 +128,9 @@ jobs:
   release:
     name: Publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/desktop-v')
-    needs: build
+    needs:
+      - plan
+      - build
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -107,9 +141,14 @@ jobs:
           path: .artifacts/release
           merge-multiple: true
 
+      - name: Create checksums
+        working-directory: .artifacts/release
+        run: sha256sum * > SHA256SUMS.txt
+
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" .artifacts/release/* --generate-notes --prerelease
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: gh release create "$TAG" .artifacts/release/* --generate-notes --latest --title "DSH Desktop v$VERSION" --verify-tag

@@ -1,78 +1,74 @@
-# DeepSeek Harness
+# DSH Desktop
 
 [English](README.md) | 中文
 
-DeepSeek Harness（`dsh`）是由 [DeepSeek AI](https://deepseek.com) 开发的开源 agent harness（智能体框架）。
+<p align="center">
+  <img src="apps/desktop/build/icon.png" alt="DSH Desktop 黑鲸鱼图标" width="168" height="168">
+</p>
 
-它采用**一切皆插件**的架构，并由 [Cordis](https://github.com/cordiverse/cordis) 驱动，其设计参见论文 [_A Programming Paradigm for Spatiotemporal Composability_](https://github.com/cordiverse/paper)。
+<p align="center">
+  <a href="https://github.com/zhonghui5207/deepseek-harness-desktop/releases/latest"><img src="https://img.shields.io/github/v/release/zhonghui5207/deepseek-harness-desktop?display_name=tag" alt="最新版本"></a>
+  <a href="https://github.com/zhonghui5207/deepseek-harness-desktop/actions/workflows/desktop-release.yml"><img src="https://github.com/zhonghui5207/deepseek-harness-desktop/actions/workflows/desktop-release.yml/badge.svg" alt="Desktop Release"></a>
+</p>
 
-## 开发者预览
+DSH Desktop 把 DeepSeek Harness Web 界面和运行时打包成可安装的 Electron 应用。Harness 运行时、工作区、会话、工具与模型路由均在本地运行；模型请求会发送到用户配置的模型提供方端点。
 
-DeepSeek Harness 目前处于 _开发者预览_ 阶段，正在快速迭代。**未来将出现破坏兼容性的变更。**
+## 下载
 
-## 运行
+从 [GitHub Releases](https://github.com/zhonghui5207/deepseek-harness-desktop/releases/latest) 下载当前安装包与归档。
 
-### 通过 `npm` 运行
+| 平台 | 推荐文件 | 架构 |
+|---|---|---|
+| macOS | `.dmg` | Apple Silicon（`arm64`） |
+| Windows | `.exe` | `x64` |
+| Linux | `.AppImage` | `x86_64` |
 
-安装 `Node.js`，然后运行：
+当前安装包尚未签名或公证。macOS Gatekeeper 与 Windows SmartScreen 可能显示警告；确认信任下载文件后，请先检查 Release，再使用操作系统提供的明确打开操作。
 
-```sh
-npx @deepseek-ai/dsh web
+<a id="run"></a>
+
+## 安装与配置
+
+1. 下载对应平台的安装包。在 macOS 上打开 DMG 并把 DSH Desktop 移到“应用程序”；在 Windows 上运行安装程序；在 Linux 上先为 AppImage 添加可执行权限，再启动它。
+2. 打开**设置 → 模型**，添加要使用的 API 端点与模型路由。
+3. 新建会话，选择已配置模型，再选择工作区目录。
+
+使用 OCX Local Gateway 等 OpenAI 兼容本地网关时，配置通常类似：
+
+```text
+API URL: http://127.0.0.1:10100/v1
+API protocol: openai-responses
+Model ID: provider/model-name
 ```
 
-该命令会启动 Web UI，默认地址为 `http://127.0.0.1:3080`。详见 [Web UI 指南](docs/user/guide/index.md)。
+协议必须与网关实际实现的端点一致，模型 ID 也必须与该网关返回的 ID 一致。请通过应用设置保存凭据，绝不要把凭据提交到仓库。
 
-### 安装 Desktop 预览版
+## 本地数据
 
-[Desktop 应用](apps/desktop/README.md) 会把同一套 UI 打包到 macOS、Windows 与 Linux。仓库的 Desktop Release workflow 会生成安装包和平台归档；`desktop-v*` tag 会将它们发布为未签名的开发者预览 GitHub Release。
+Desktop 与 `dsh` CLI 使用同一个 Harness home：设置 `$DSH_HOME` 时使用该目录，否则使用 `~/.dsh`。因此设置、凭据引用、会话、模型路由与 profile 可以在两个界面间继续使用。该目录包含本地应用状态，也可能引用凭据，请妥善保护。
 
-### 从源码运行
+renderer 运行在沙箱中，只连接 Desktop 进程持有的回环服务器。应用不会把该服务器暴露给局域网。
 
-如需从仓库源码运行：
+## 更新
 
-```sh
-git clone https://github.com/deepseek-ai/deepseek-harness.git
-cd deepseek-harness
-pnpm install
-pnpm run build
-pnpm dsh web
-```
+每个发布版本都会分别为 macOS、Windows 与 Linux 构建并执行冒烟测试。安装较新的 [GitHub Release](https://github.com/zhonghui5207/deepseek-harness-desktop/releases) 即可更新；应用不会静默替换自身。
 
-## 社区与支持
-
-- 欢迎通过 [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions) 提交反馈或 bug 报告。
-- 为你的插件仓库添加 [`dsh-plugin`](https://github.com/topics/dsh-plugin) 话题，便于被发现。
-- 欢迎加入 DeepSeek Harness 企微群：扫码添加企微小助手并填写入群问卷，完成后小助手会邀请你入群。
-
-<table>
-  <thead>
-    <tr>
-      <th align="center">企微小助手</th>
-      <th align="center">入群问卷</th>
-      <th align="center">微信公众号</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td align="center"><img src="assets/community-wecom-assistant.png" alt="DeepSeek Harness 企微小助手二维码" width="180" height="180"></td>
-      <td align="center"><a href="https://trtgsjkv6r.feishu.cn/share/base/form/shrcnIt5twSVdLGD52KJBckGCgg"><img src="assets/community-wecom-survey.png" alt="DeepSeek Harness 入群问卷二维码" width="180" height="180"></a></td>
-      <td align="center"><img src="assets/community-wechat-official-account.png" alt="DeepSeek Harness 团队微信公众号二维码" width="180" height="180"></td>
-    </tr>
-  </tbody>
-</table>
-
-## 参与贡献
-
-参见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+<a id="run-from-source"></a>
 
 ## 开发
 
-请先阅读[开发指南](docs/development.md)与[架构文档](docs/architecture.md)。
+本仓库采用 monorepo，因为 Desktop 应用与 Harness 运行时目前从同一个源码 commit 发布。Desktop 的架构、安全模型、打包命令与已知限制见 [Desktop 包参考](apps/desktop/README.md)。
 
-面向 agent：请遵循 [AGENTS.md](AGENTS.md)。
+```sh
+git clone https://github.com/zhonghui5207/deepseek-harness-desktop.git
+cd deepseek-harness-desktop
+pnpm install
+pnpm run build
+pnpm --filter @deepseek-ai/dsh-desktop run dev
+```
 
-## 许可证
+贡献者环境与架构说明见[开发指南](docs/development.md)和[架构参考](docs/architecture.md)。
 
-[MIT](LICENSE)
+## 许可证与署名
 
-第三方依赖及其许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+DSH Desktop 是基于 DeepSeek Harness 代码库与 Cordis 构建的社区 Desktop 发行版。仓库使用 [MIT](LICENSE) 许可证，依赖声明保留在 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
