@@ -113,4 +113,39 @@ describe('llm-pi-ai real dormant composition', () => {
     expect(result.message.content).toEqual([{ type: 'text', text: 'hello' }])
     expect(server.headers[0]?.authorization).toBe('Bearer key-from-store')
   })
+
+  it('applies per-model final-payload compatibility from the written settings section', async () => {
+    vi.stubEnv('PI_COMPOSITION_KEY', '')
+    const server = await mockServer([
+      { status: 401, body: JSON.stringify({ error: { message: 'expected mock failure' } }) },
+    ])
+    const { ctx, settingsPath } = await loadComposition()
+
+    await writeFile(settingsPath, [
+      'llm-pi-ai:',
+      '  providers:',
+      '    strict-gateway:',
+      '      apiKeyEnv: PI_COMPOSITION_KEY',
+      '      api: openai-responses',
+      `      baseURL: ${server.url}/v1`,
+      '      models:',
+      '        - id: strict',
+      '          maxTokens: 128000',
+      '          omitMaxOutputTokens: true',
+      '',
+    ].join('\n'))
+    await vi.waitFor(() => {
+      expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['strict-gateway'])
+    }, { timeout: 5000 })
+
+    const result = await assemble(ctx, {
+      provider: 'strict-gateway',
+      model: 'strict',
+      messages: [],
+      maxTokens: 64,
+    })
+    expect(result.finish.kind).toBe('error')
+    expect(server.paths).toEqual(['/v1/responses'])
+    expect(server.requests[0]).not.toHaveProperty('max_output_tokens')
+  })
 })

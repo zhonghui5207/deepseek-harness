@@ -64,3 +64,11 @@ describe('modality schema boundary', () => {
     expect(absent.providers['acme-gateway']?.defaultInput).toEqual(['text'])
   })
 })
+
+describe('request-payload compatibility schema boundary', () => {
+  it('accepts only a boolean omitMaxOutputTokens value', () => {
+    expect(configWith({ omitMaxOutputTokens: true })).not.toThrow()
+    expect(configWith({ omitMaxOutputTokens: false })).not.toThrow()
+    expect(configWith({ omitMaxOutputTokens: 'yes' })).toThrow()
+  })
+})

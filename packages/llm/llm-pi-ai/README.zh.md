@@ -69,15 +69,24 @@
               off:
               high: high
               max: ultra
+      # OpenAI Responses gateway whose upstream rejects an output cap.
+      strict-responses-gateway:
+        apiKeyEnv: STRICT_RESPONSES_API_KEY
+        api: openai-responses
+        baseURL: https://strict.example/v1
+        models:
+          - id: strict-large
+            maxTokens: 128000
+            omitMaxOutputTokens: true
 ```
 
 字典形状使重复路由无法表示，发布前的数组形状（每个 profile 携带 `provider` 字段）会加载失败并给出迁移指引。`providers` 也可以为空或整体省略：适配器将以**休眠**姿态挂载——零路由、模型选择器不多一条——一旦 `llm-pi-ai:` settings 分节提供了 profile 就即时注册路由，分节清空时随之撤销。无论是否休眠，插件都会在可配置提供方目录（`ctx.llm.listConfigurableProviders()`，settings 路径 `providers.<provider>`）中声明每个已安装 catalog 提供方，并与当前 profile 声明的每条路由取并集，因此配置界面既能在任何路由存在之前就提供完整 catalog，也能寻址一条手工声明的路由。每个条目都带上 `declared`：pi-ai 在这个键下是否什么都没有。它跟随已安装 catalog 而非设置文档，因为收窄一个内置提供方的模型同样会存下 profile，而那条路由仍然是 pi-ai 认识的——只有适配器分得清两者，所以由目录直接给出答案，而不是留给界面去猜。哪些适配器存在归组合面；哪些提供方在运行可以完全交给用户的设置文档。向 `ctx.llm` 注册具有原子性：如果与另一适配器已拥有的任何提供方路由冲突，插件会加载失败，不注册剩余路由。模型 id 不是生命周期配置；路由未配置的模型会在发起任何提供方请求前以 `LlmError('UNKNOWN_MODEL')` 失败。
 
 ## Catalog 解析
 
-profile 的 `models` 列表是*替换*该路由已安装 catalog，而不是扩充它；省略它（或留空）则原样服务该 catalog。每个条目都会从同 `id` 的已安装模型继承自身未设置的字段，因此把 catalog 路由收窄到两个模型、更正某个容量，或加入一个比已安装 catalog 更新的模型，都是一行编辑——但一旦声明了 `models` 列表，该路由要继续服务的每个模型就都必须出现在其中，条目哪怕只写一个 `id` 也足够。可配置的条目字段是 `id`、`name`、`contextWindow`、`maxTokens`、`reasoningEfforts` 与 `compat`。定价与输入模态没有 harness 消费方，因此沿用已安装条目或直接缺席。
+profile 的 `models` 列表是*替换*该路由已安装 catalog，而不是扩充它；省略它（或留空）则原样服务该 catalog。每个条目都会从同 `id` 的已安装模型继承自身未设置的字段，因此把 catalog 路由收窄到两个模型、更正某个容量，或加入一个比已安装 catalog 更新的模型，都是一行编辑——但一旦声明了 `models` 列表，该路由要继续服务的每个模型就都必须出现在其中，条目哪怕只写一个 `id` 也足够。可配置的条目字段是 `id`、`name`、`contextWindow`、`maxTokens`、`omitMaxOutputTokens`、`input`、`reasoningEfforts` 与 `compat`。定价没有 harness 消费方，因此沿用已安装条目或直接缺席。
 
-`modelOverrides` 无需这份代价就能就地重塑单个已安装 catalog 模型：每个键是一个 catalog 模型 id，每个值可写 `models` 条目接受的同一批字段，只是 id 落在键上，而 catalog 的其余部分原样继续服务——「改一个模型、其余三十七个原样保留」只是一次三行编辑。一条覆盖会成为该 catalog 条目的配置，因此容量、档位与 compat 沿与 `models` 条目相同的路径解析，携带相同的诊断与相同的请求默认值语义。覆盖只在正服务自身 catalog 的 catalog 路由上才有意义：与 `models` 列表并存的一份（该列表本就替换了 catalog）、落在手工声明路由上的一份（其模型已在 `models` 中完整写出），或点名了 catalog 未描述模型的一份，都会被拒绝而非跳过，因为一个静默保持原样的模型，就是一个否则要有人费力追查的笔误。
+`modelOverrides` 无需这份代价就能就地重塑单个已安装 catalog 模型：每个键是一个 catalog 模型 id，每个值可写 `models` 条目接受的同一批字段，只是 id 落在键上，而 catalog 的其余部分原样继续服务——「改一个模型、其余三十七个原样保留」只是一次三行编辑。一条覆盖会成为该 catalog 条目的配置，因此容量、模态、档位、协议兼容与请求字段省略沿与 `models` 条目相同的路径解析，携带相同的诊断与请求默认值语义。覆盖只在正服务自身 catalog 的 catalog 路由上才有意义：与 `models` 列表并存的一份（该列表本就替换了 catalog）、落在手工声明路由上的一份（其模型已在 `models` 中完整写出），或点名了 catalog 未描述模型的一份，都会被拒绝而非跳过，因为一个静默保持原样的模型，就是一个否则要有人费力追查的笔误。
 
 ### 按模型的推理（reasoning）档位
 
@@ -88,6 +97,10 @@ profile 的 `models` 列表是*替换*该路由已安装 catalog，而不是扩�
 ### 推理分派的 compat 开关
 
 思考级别如何在协议中传输——单独一个 `reasoning_effort`、DeepSeek 的 `thinking: {type}` 加上档位、z.ai 的 `thinking` 对象，诸如此类——就是 pi-ai 的 `compat.thinkingFormat`，pi-ai 会从端点 URL 猜测它；私有网关的 URL 什么也说明不了，于是说 DeepSeek 方言的网关只会收到 OpenAI 方言的请求，且无从更正。因此 `compat.thinkingFormat` 与 `compat.supportsReasoningEffort` 既可配置在路由上（作为其模型的默认值），也可按模型配置（逐字段胜出），解析顺序为模型 → 路由 → 已安装 catalog 条目 → pi-ai 按 URL 得出的猜测；设置路由级开关会为路由上的每个模型遮蔽 catalog 条目的值，而且除了重述其值，没有任何写法能把某个字段交还给 catalog。`thinkingFormat` 接受 pi-ai 可分派的各种格式，但不含两个 `chat-template` 变体：它们需要的 `chatTemplateKwargs` 本配置并不暴露。两个开关都只存在于 `openai-completions` 上——其余协议的推理形状由协议本身承载——因此在其他协议的模型上设置模型级开关会使解析失败，路由级开关会跳过其他协议的模型，而完全没有 `openai-completions` 模型的路由则会被拒绝。pi-ai compat 面的其余部分（`supportsStore`、`maxTokensField`……）保持自动检测，特意不在此处开放配置。
+
+### OpenAI Responses 输出上限省略
+
+`omitMaxOutputTokens: true` 会在 pi-ai 构造最终 payload 后，为该条精确的 `openai-responses` 模型删除 `max_output_tokens`。它只用于上游拒绝这一标准字段的兼容网关。模型的 `maxTokens` 仍用于描述输出能力并参与上下文计算，但不再成为 Harness 请求默认值，显式的单次调用上限也会被省略，因此输出长度由提供方决定。在其他协议上设置该开关会使 profile 解析失败，而不是静默失效。
 
 条目与已安装 catalog 都没有给出尺寸的模型，会采用该路由的 `defaultContextWindow`（262,144）与 `defaultMaxTokens`（32,768），因此一份只公布 id 的列表同样能产出可服务的路由。两个回退值本质上都是猜测，这正是它们作为路由字段、供网关服务更小模型的部署一次性更正的原因，而不是埋在适配器里的常量；回退值只用于给模型定尺寸，绝不会变成单次请求上限。
 

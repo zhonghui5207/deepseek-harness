@@ -178,6 +178,13 @@ function requestHeaders(headers: Readonly<Record<string, string>> | undefined): 
   }
 }
 
+/** Remove the output-cap field after pi-ai has materialized its final request body. */
+function omitMaxOutputTokens(payload: unknown): unknown {
+  const next = { ...payload as Record<string, unknown> }
+  delete next.max_output_tokens
+  return next
+}
+
 /**
  * pi-ai-backed multi-provider adapter. Each operation reads the current
  * profiles, so a configuration change reaches the next request without a
@@ -315,6 +322,7 @@ export class PiAiAdapter extends LlmAdapter {
         ...options.temperature === undefined ? {} : { temperature: options.temperature },
         ...options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens },
         ...options.sessionId === undefined ? {} : { sessionId: String(options.sessionId) },
+        ...profile.omitMaxOutputTokens.has(model.id) ? { onPayload: omitMaxOutputTokens } : {},
         signal: watchdog.signal,
         // Profile headers are deployment-owned; attribution names are
         // Harness-owned and therefore win collisions.
