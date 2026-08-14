@@ -1,0 +1,40 @@
+appId: io.github.zhonghui5207.dsh-desktop
+productName: DSH Desktop
+asar: false
+
+directories:
+  output: ../../.artifacts/desktop
+
+files:
+  - lib/*.js
+
+extraResources:
+  - from: ../../LICENSE
+    to: LICENSE
+  - from: ../../THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+    - zip
+  artifactName: dsh-desktop-${version}-mac-${arch}.${ext}
+
+win:
+  target:
+    - nsis
+    - zip
+  artifactName: dsh-desktop-${version}-windows-${arch}.${ext}
+
+linux:
+  category: Development
+  target:
+    - AppImage
+    - tar.gz
+  artifactName: dsh-desktop-${version}-linux-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always

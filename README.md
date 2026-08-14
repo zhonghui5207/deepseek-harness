@@ -22,6 +22,10 @@ npx @deepseek-ai/dsh web
 
 The command starts the Web UI, served at `http://127.0.0.1:3080` by default. See [Web UI guide](docs/user/guide/index.md).
 
+### Install the Desktop preview
+
+The [Desktop application](apps/desktop/README.md) packages the same UI for macOS, Windows, and Linux. The repository's Desktop Release workflow produces installers and platform archives; `desktop-v*` tags publish them as unsigned developer-preview GitHub Releases.
+
 ### Run from source
 
 To run from a repository checkout:

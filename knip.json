@@ -704,6 +704,22 @@
         "tests/**/*.ts"
       ]
     },
+    "apps/desktop": {
+      "entry": [
+        "scripts/**/*.mjs",
+        "src/main.ts",
+        "tests/**/*.spec.ts",
+        "tests/**/*.snapshot.ts"
+      ],
+      "project": [
+        "scripts/**/*.mjs",
+        "src/**/*.ts",
+        "tests/**/*.ts"
+      ],
+      "ignoreDependencies": [
+        "@deepseek-ai/.+"
+      ]
+    },
     "apps/web": {
       "entry": [
         "tests/**/*.e2e.ts",

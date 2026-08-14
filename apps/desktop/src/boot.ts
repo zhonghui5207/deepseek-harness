@@ -9,12 +9,14 @@
  */
 
 import { writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import {
   boot,
+  composeEntries,
   healProfilesModuleFallback,
   installFailLoud,
   loadLayeredEnv,
@@ -25,11 +27,10 @@ import {
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { DSH_LAUNCH_ENVIRONMENT_KEY } from '@deepseek-ai/dsh-launch-environment'
 import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
+import type {} from '@deepseek-ai/dsh-host-webserver'
 
 /** Boot-surface name used for diagnostics and the `.env` layering snapshot. */
 const NAME = 'dsh-desktop'
-/** The local port the desktop window loads; distinct from `dsh web`'s 3080. */
-const DESKTOP_PORT = 3081
 /** Root config filename inside a profile directory. */
 const PROFILE_ROOT_FILENAME = 'cordis.yml'
 
@@ -37,25 +38,101 @@ const PROFILE_ROOT_FILENAME = 'cordis.yml'
 const PROFILE_ROOT_CONFIG = '[]\n'
 
 /** Absolute path of this app's package.json: the bundle-resolution anchor. */
-export const INSTALL_ANCHOR = fileURLToPath(new URL('../package.json', import.meta.url))
+const INSTALL_ANCHOR = fileURLToPath(new URL('../package.json', import.meta.url))
+
+/** System presets supplied by the installed DSH application package. */
+const SHIPPED_AGENT_PRESET_IDS = ['code', 'cordis', 'minimal', 'standard'] as const
+
+/** Preset fields needed to verify the installed application assets. */
+interface InstalledAgentPreset {
+  id: string
+  trust: 'system' | 'user'
+  broken?: string
+}
+
+/** Runtime face used only for startup verification. */
+interface AgentPresetRoster {
+  list(): Promise<readonly InstalledAgentPreset[]>
+}
+
+/** Resolve the single installed source of DSH's system preset compositions. */
+function shippedPresetRoot(): string {
+  const require = createRequire(INSTALL_ANCHOR)
+  const dshPackage = require.resolve('@deepseek-ai/dsh/package.json')
+  return join(dirname(dshPackage), 'config', 'agent-presets')
+}
+
+/** Build the launch-owned root patch while preserving the composed roster config. */
+function shippedPresetOverlay(patches: readonly PatchOptions[]): PatchOptions {
+  const row = composeEntries([[...patches]]).find(entry => entry.id === 'agent-presets')
+  if (row === undefined) {
+    throw new Error('dsh-desktop: web profile has no agent-presets entry')
+  }
+  return {
+    id: 'agent-presets',
+    config: {
+      ...(row.config ?? {}) as Record<string, unknown>,
+      roots: [{ path: shippedPresetRoot(), trust: 'system' }],
+    },
+  }
+}
+
+/** Reject an incomplete installation before an interaction needs a preset. */
+async function verifyShippedPresets(ctx: Context): Promise<readonly string[]> {
+  const roster = (ctx as Context & { agentPresets?: AgentPresetRoster }).agentPresets
+  if (roster === undefined) throw new Error('dsh-desktop: web profile activated without agentPresets')
+  const presets = await roster.list()
+  const systemPresets = new Map(presets.filter(preset => preset.trust === 'system').map(preset => [preset.id, preset]))
+  const missing = SHIPPED_AGENT_PRESET_IDS.filter(id => !systemPresets.has(id))
+  const broken = SHIPPED_AGENT_PRESET_IDS.flatMap((id) => {
+    const reason = systemPresets.get(id)?.broken
+    return reason === undefined ? [] : [`${id}: ${reason}`]
+  })
+  if (missing.length > 0 || broken.length > 0) {
+    const failures = [
+      ...missing.length === 0 ? [] : [`missing ${missing.join(', ')}`],
+      ...broken.length === 0 ? [] : [`invalid ${broken.join('; ')}`],
+    ]
+    throw new Error(`dsh-desktop: installed system agent presets are unusable (${failures.join('; ')})`)
+  }
+  return SHIPPED_AGENT_PRESET_IDS
+}
 
 /** The home-level user patch layer (`$DSH_HOME/cordis.patch.yml`). */
-export function homePatchPath(): string {
+function homePatchPath(): string {
   return join(resolveDshHome(), PROFILE_PATCH_FILENAME)
+}
+
+/** Launch-owned inputs that do not belong in the shared Web profile. */
+export interface DesktopBootOptions {
+  /** Requested loopback port; zero lets the operating system choose an unused port. */
+  port?: number
+  /** Forward a config-tree exit request into the Electron lifecycle. */
+  requestExit?: (code: number) => void
+}
+
+/** Settled Desktop host state and the exact loopback URL its renderer loads. */
+export interface DesktopRuntime {
+  /** Root context; the caller owns disposal and must await it before process exit. */
+  context: Context
+  /** URL built from the WebServer's actual bound host and port. */
+  url: string
+  /** Validated system preset ids supplied by the installed DSH package. */
+  agentPresetIds: readonly string[]
 }
 
 /**
  * Boot the `web` profile in-process and return its settled root context.
  *
- * The desktop window loads `http://127.0.0.1:3081`, so a programmatic overlay
- * pins the `webserver` row away from the default 3080 that a concurrently
- * running `dsh web` owns. A `prepare` hook supplies the frozen launch
- * environment and the command-line snapshot before any config-tree entry
- * mounts, exactly as the CLI surface does. Fail-loud wraps the booted tree so
- * an unhandled rejection tears it down instead of wedging the process.
- * @returns the booted root context; dispose it with `ctx.fiber.dispose()`.
+ * A programmatic overlay binds the server to loopback and requests an
+ * OS-assigned port by default. A `prepare` hook supplies the frozen launch
+ * environment and command-line snapshot before any config-tree entry mounts,
+ * exactly as the CLI surface does. Fail-loud wraps the booted tree so an
+ * unhandled rejection tears it down instead of wedging the process.
+ * @param options - launch-owned port and application-exit handling.
+ * @returns the booted context and exact URL; dispose `context.fiber` before exit.
  */
-export async function bootDesktop(): Promise<Context> {
+export async function bootDesktop(options: DesktopBootOptions = {}): Promise<DesktopRuntime> {
   healProfilesModuleFallback(INSTALL_ANCHOR)
   const profile = loadProfile(NAME, 'web', INSTALL_ANCHOR)
   // The root is always rewritten: the whole composition is patch layers, and
@@ -64,23 +141,42 @@ export async function bootDesktop(): Promise<Context> {
   const bundlePatches = profile.layers.flatMap(layer => layer.patches)
   const homePatches = loadOptionalPatches(NAME, homePatchPath()) ?? []
   const overlays: PatchOptions[] = [
-    { id: 'webserver', config: { host: '127.0.0.1', port: DESKTOP_PORT } },
+    { id: 'webserver', config: { host: '127.0.0.1', port: options.port ?? 0 } },
   ]
+  const patches = [...bundlePatches, ...profile.patches, ...homePatches, ...overlays]
+  patches.push(shippedPresetOverlay(patches))
   const ctx = await boot(
     NAME,
     join(profile.dir, PROFILE_ROOT_FILENAME),
-    [...bundlePatches, ...profile.patches, ...homePatches, ...overlays],
+    patches,
     (hostCtx) => {
       // Before any config-tree entry mounts, so plugins resolve launch-time
       // environment values from the same immutable provenance snapshot.
       hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, loadLayeredEnv(NAME))
       // The command line is a launcher fact; the desktop shell owns no inner
-      // arguments, and app exit is driven by window closure, not a plugin.
-      provideCmdline(hostCtx, { args: [], exit: () => undefined })
+      // arguments, while the Electron lifecycle owns config-tree exit requests.
+      provideCmdline(hostCtx, { args: [], exit: options.requestExit ?? (() => undefined) })
     },
+    pathToFileURL(join(profile.dir, 'package.json')).href,
   )
+  const webServer = ctx.get('webServer')
+  if (webServer === undefined) {
+    await ctx.fiber.dispose()
+    throw new Error('dsh-desktop: web profile activated without a webServer service')
+  }
+  let agentPresetIds: readonly string[]
+  try {
+    agentPresetIds = await verifyShippedPresets(ctx)
+  } catch (error) {
+    await ctx.fiber.dispose()
+    throw error
+  }
   installFailLoud(NAME, process, async () => {
     await ctx.fiber.dispose()
   })
-  return ctx
+  return {
+    context: ctx,
+    url: `http://${webServer.host}:${String(webServer.port)}`,
+    agentPresetIds,
+  }
 }

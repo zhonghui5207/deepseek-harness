@@ -22,6 +22,10 @@ npx @deepseek-ai/dsh web
 
 该命令会启动 Web UI，默认地址为 `http://127.0.0.1:3080`。详见 [Web UI 指南](docs/user/guide/index.md)。
 
+### 安装 Desktop 预览版
+
+[Desktop 应用](apps/desktop/README.md) 会把同一套 UI 打包到 macOS、Windows 与 Linux。仓库的 Desktop Release workflow 会生成安装包和平台归档；`desktop-v*` tag 会将它们发布为未签名的开发者预览 GitHub Release。
+
 ### 从源码运行
 
 如需从仓库源码运行：

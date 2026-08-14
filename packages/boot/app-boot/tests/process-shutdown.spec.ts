@@ -94,7 +94,7 @@ describe('process shutdown', () => {
     await pending
   })
 
-  it('lets Ctrl+C force a normal shutdown already stuck in disposal', async () => {
+  it('lets an interrupt force a normal shutdown already stuck in disposal', async () => {
     const disposal = deferred()
     const exit = vi.fn()
     const complete = vi.fn()
@@ -111,7 +111,7 @@ describe('process shutdown', () => {
     expect(complete).not.toHaveBeenCalled()
   })
 
-  it('forces exit after disposal started by a signal', async () => {
+  it('forces exit after disposal started by an interrupt', async () => {
     const disposal = deferred()
     const exit = vi.fn()
     const complete = vi.fn()
@@ -126,7 +126,7 @@ describe('process shutdown', () => {
     expect(complete).not.toHaveBeenCalled()
   })
 
-  it('drains on the first signal and forces on the second signal', async () => {
+  it('drains on the first interrupt and forces on the second', async () => {
     const disposal = deferred()
     const dispose = vi.fn(() => disposal.promise)
     const exit = vi.fn()
@@ -164,7 +164,7 @@ describe('process shutdown', () => {
     expect(exit).not.toHaveBeenCalled()
   })
 
-  it('lets a signal force exit while natural completion drains remaining handles', async () => {
+  it('lets an interrupt force exit after natural completion', async () => {
     const exit = vi.fn()
     const complete = vi.fn()
     const shutdown = createProcessShutdown(() => Promise.resolve(), exit, complete)

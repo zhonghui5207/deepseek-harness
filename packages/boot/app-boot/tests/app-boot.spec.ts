@@ -625,6 +625,54 @@ describe('boot', () => {
     }
   })
 
+  it('resolves an anchored bare plugin without Node internal-loader access', async () => {
+    const dir = tmp()
+    const harness = tmp()
+    const harnessPlugin = join(harness, 'node_modules', 'anchored-plugin')
+    const nestedPlugin = join(harness, 'node_modules', 'nested-plugin')
+    mkdirSync(harnessPlugin, { recursive: true })
+    mkdirSync(nestedPlugin, { recursive: true })
+    writeFileSync(join(harnessPlugin, 'package.json'), JSON.stringify({
+      name: 'anchored-plugin',
+      type: 'module',
+      exports: './index.mjs',
+    }))
+    writeFileSync(join(harnessPlugin, 'index.mjs'), [
+      'export const inject = ["loader"]',
+      'export async function apply(ctx) {',
+      '  ctx.provide("anchoredPluginLoaded", true)',
+      '  await ctx.loader.create({ name: "nested-plugin" })',
+      '}',
+      '',
+    ].join('\n'))
+    writeFileSync(join(nestedPlugin, 'package.json'), JSON.stringify({
+      name: 'nested-plugin',
+      type: 'module',
+      exports: './index.mjs',
+    }))
+    writeFileSync(join(nestedPlugin, 'index.mjs'), [
+      'export function apply(ctx) {',
+      '  ctx.provide("nestedPluginLoaded", true)',
+      '}',
+      '',
+    ].join('\n'))
+    writeFileSync(join(dir, 'cordis.yml'), '- id: anchored\n  name: anchored-plugin\n')
+
+    const ctx = await boot(
+      NAME,
+      join(dir, 'cordis.yml'),
+      undefined,
+      (hostCtx) => { hostCtx.loader.internal = undefined },
+      pathToFileURL(join(harness, 'entry.mjs')).href,
+    )
+    try {
+      expect(ctx.get('anchoredPluginLoaded')).toBe(true)
+      expect(ctx.get('nestedPluginLoaded')).toBe(true)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('runs host preparation before the Loader tree mounts', async () => {
     const dir = tmp()
     writeFileSync(join(dir, 'noop.mjs'), 'export const name = "noop"\nexport function apply() {}\n')

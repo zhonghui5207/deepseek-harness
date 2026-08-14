@@ -1,9 +1,9 @@
-/** Bounded, escalating process shutdown for the long-lived CLI surfaces. */
+/** Bounded, escalating process shutdown shared by long-lived app launchers. */
 
 /** Maximum grace allowed for the application tree to dispose before process exit. */
 export const PROCESS_SHUTDOWN_TIMEOUT_MS = 5_000
 
-/** Process-exit controller shared by normal completion and Unix signal handlers. */
+/** Process-exit controller shared by normal completion and interrupt handlers. */
 export interface ProcessShutdown {
   /** Start or join graceful disposal before allowing natural completion with `code`. */
   shutdown(code: number): Promise<void>
@@ -14,10 +14,10 @@ export interface ProcessShutdown {
 /**
  * Create one process-exit controller around an application disposer.
  * @param dispose - Whole-application teardown that resolves at quiescence.
- * @param forceExit - Function that exits the process immediately, replaceable by tests.
- * @param complete - Function that records the natural completion code, replaceable by tests.
+ * @param forceExit - Function that exits immediately, replaceable by tests and non-Node launchers.
+ * @param complete - Function that records or requests graceful completion, replaceable by tests.
  * @param timeoutMs - Grace before forced exit, replaceable by tests.
- * @returns A controller whose normal calls coalesce and whose repeated signal call escalates.
+ * @returns A controller whose normal calls coalesce and whose repeated interrupt escalates.
  */
 export function createProcessShutdown(
   dispose: () => Promise<void>,
