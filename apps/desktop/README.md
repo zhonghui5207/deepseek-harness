@@ -6,6 +6,8 @@ The installable Electron shell for the DeepSeek Harness Web surface. The Electro
 
 Desktop uses the same Harness home as the CLI: `$DSH_HOME`, otherwise `~/.dsh`. Profiles, `settings.yaml`, `.credentials.yaml`, sessions, and model routes therefore carry across without a Desktop-specific migration. Closing the last window exits on Windows and Linux; macOS keeps the application active and recreates the window on activation. A single-instance lock focuses the existing window, and every quit path gives the Cordis tree a bounded graceful shutdown before Electron exits.
 
+The main process checks the repository's fixed GitHub Latest Release endpoint after startup and from **Help → Check for Updates…**. A valid `desktop-v<version>` tag is compared with the installed application through SemVer. Startup stays silent when the installed version is current or the bounded request fails; a manual check reports those outcomes. A newer version opens a native prompt, and **Download Update** hands the fixed release page to the operating-system browser. The renderer receives no update API or added privilege.
+
 ## Development and packaging
 
 Build the repository before launching from a clean checkout because the Web profile serves the built frontend dist:
@@ -23,7 +25,7 @@ pnpm --filter @deepseek-ai/dsh-desktop run smoke:packaged
 pnpm --filter @deepseek-ai/dsh-desktop run dist
 ```
 
-The package manifest deliberately lists the complete required workspace-peer closure for the Web profile and depends on `@deepseek-ai/dsh` as the installed owner of `config/agent-presets`. At startup, Desktop mounts that directory as the system preset root and rejects an installation missing `code`, `cordis`, `minimal`, or `standard`. Electron Builder does not materialize workspace peers from the monorepo's ambient links, so `pnpm run verify-runtime-closure` checks the executable closure. The packaged smoke starts the actual unpacked executable against a new temporary Harness home and creates one session from every system preset, covering the same path as the New Session action and cold session resume. Before the Linux smoke, the release workflow gives Electron's unpacked `chrome-sandbox` helper its installed root ownership and `4755` mode; it does not disable Chromium sandboxing.
+The package manifest deliberately lists the complete required workspace-peer closure for the Web profile and depends on `@deepseek-ai/dsh` as the installed owner of `config/agent-presets`. At startup, Desktop mounts that directory as the system preset root and rejects an installation missing `code`, `cordis`, `minimal`, or `standard`. Electron Builder does not materialize workspace peers from the monorepo's ambient links, so `pnpm run verify-runtime-closure` checks the executable closure. The packaged smoke starts the actual unpacked executable with new temporary Harness and Electron user-data directories, then creates one session from every system preset, covering the same path as the New Session action and cold session resume without colliding with an installed running instance. Before the Linux smoke, the release workflow gives Electron's unpacked `chrome-sandbox` helper its installed root ownership and `4755` mode; it does not disable Chromium sandboxing.
 
 `asar` remains disabled because profile fallback links and Cordis Loader imports need real package directories in the installed application. Installers are therefore the supported user artifact; the npm package is a release input, not the end-user installation flow.
 
@@ -44,7 +46,7 @@ No additional effect beyond `dsh-web-app`; the Desktop shell contributes no mode
 ## Known Limitations and Deferred Work
 
 - **Preview artifacts are unsigned and unnotarized** — macOS Gatekeeper and Windows SmartScreen can warn. The platform packages include the black-whale application icon.
-- **No automatic updates** — install a newer GitHub Release manually.
+- **No unattended installation** — Desktop discovers newer GitHub Releases, but the user still downloads and installs the selected package. Fully automatic replacement is deferred until packages are signed and notarized.
 - **Desktop does not watch user patch files** — changes to home-level or profile `cordis.patch.yml` require an application restart; client-bundle HMR can still operate when its separate rebuild watcher is running.
 - **The renderer currently uses loopback HTTP/WebSocket** — it does not use a `file://` renderer or Electron IPC carrier. The server is bound to `127.0.0.1` on an ephemeral port and is not exposed to the LAN.
 - **`asar` is disabled** — the unpacked dependency tree is larger, but preserves filesystem-addressable plugin packages and native modules.

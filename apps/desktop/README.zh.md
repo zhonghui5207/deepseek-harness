@@ -6,6 +6,8 @@ DeepSeek Harness Web 表层的可安装 Electron 壳。Electron 主进程在进�
 
 Desktop 与 CLI 使用同一个 Harness home：优先取 `$DSH_HOME`，否则使用 `~/.dsh`。因此 profile、`settings.yaml`、`.credentials.yaml`、session 和模型路由无需 Desktop 专用迁移即可共用。在 Windows 与 Linux 上关闭最后一个窗口会退出；macOS 会保留应用，并在再次激活时重建窗口。单实例锁会聚焦已有窗口，所有退出路径都会先给 Cordis 配置树一个有上限的优雅关闭窗口，再退出 Electron。
 
+主进程会在启动后以及用户选择**帮助 → 检查更新…**时访问仓库中固定的 GitHub Latest Release endpoint。应用使用 SemVer 比较有效的 `desktop-v<version>` tag 与已安装版本。已是最新版本或有上限的请求失败时，启动检查不会打扰用户；手动检查则会报告这两种结果。发现较新版本后，应用显示原生提示；点击**下载更新**会把固定发布页面交给操作系统浏览器。renderer 不会获得更新 API 或额外权限。
+
 ## 开发与打包
 
 全新 checkout 启动前需先构建仓库，因为 Web profile 会提供已构建的前端 dist：
@@ -23,7 +25,7 @@ pnpm --filter @deepseek-ai/dsh-desktop run smoke:packaged
 pnpm --filter @deepseek-ai/dsh-desktop run dist
 ```
 
-本包 manifest（元数据清单）有意列出 Web profile 所需的完整 workspace 对等依赖闭包，并依赖 `@deepseek-ai/dsh` 唯一提供安装后的 `config/agent-presets`。Desktop 启动时把该目录挂为系统 preset 根；缺少 `code`、`cordis`、`minimal` 或 `standard` 的安装会被直接拒绝。Electron Builder 不会从 monorepo 的环境链接中物化 workspace peer，因此 `pnpm run verify-runtime-closure` 会检查可执行闭包。打包冒烟使用全新的临时 Harness home 启动真正的未封装可执行文件，并分别通过每个系统 preset 创建 session，覆盖与“新建会话”和冷恢复相同的路径。Linux 冒烟开始前，发布 workflow 会把 Electron 未封装的 `chrome-sandbox` helper 设置为安装后的 root 所有权与 `4755` 模式，而不会关闭 Chromium 沙箱。
+本包 manifest（元数据清单）有意列出 Web profile 所需的完整 workspace 对等依赖闭包，并依赖 `@deepseek-ai/dsh` 唯一提供安装后的 `config/agent-presets`。Desktop 启动时把该目录挂为系统 preset 根；缺少 `code`、`cordis`、`minimal` 或 `standard` 的安装会被直接拒绝。Electron Builder 不会从 monorepo 的环境链接中物化 workspace peer，因此 `pnpm run verify-runtime-closure` 会检查可执行闭包。打包冒烟使用全新的临时 Harness home 和 Electron user-data 目录启动真正的未封装可执行文件，再分别通过每个系统 preset 创建 session；这样既覆盖与“新建会话”和冷恢复相同的路径，也不会与正在运行的已安装实例争用单实例锁。Linux 冒烟开始前，发布 workflow 会把 Electron 未封装的 `chrome-sandbox` helper 设置为安装后的 root 所有权与 `4755` 模式，而不会关闭 Chromium 沙箱。
 
 `asar` 目前保持关闭，因为 profile fallback 链接和 Cordis Loader 导入需要已安装应用中的真实包目录。因此安装包是面向用户的支持产物；npm 包只是发布输入，不是最终用户安装方式。
 
@@ -44,7 +46,7 @@ Desktop 挂载与 `dsh web` 相同的 `dsh-web-app` 组合包和模型可见 Web
 ## 已知限制与暂缓事项
 
 - **预览产物未签名、未公证**：macOS Gatekeeper 与 Windows SmartScreen 可能警告。各平台安装包均包含黑鲸鱼应用图标。
-- **没有自动更新**：需要手动安装新版 GitHub Release。
+- **不会无人值守安装**：Desktop 可以发现较新的 GitHub Release，但仍由用户下载并安装所选安装包。安装包完成签名与公证后，才会考虑全自动替换。
 - **Desktop 不监听用户 patch 文件**：home 级或 profile 的 `cordis.patch.yml` 发生变化后需要重启应用；客户端 bundle 的 HMR 在其独立重建 watcher 运行时仍可工作。
 - **renderer 当前使用回环 HTTP／WebSocket**：尚未使用 `file://` renderer 或 Electron IPC carrier。服务器绑定到临时端口上的 `127.0.0.1`，不会向局域网开放。
 - **`asar` 已关闭**：未封装依赖树体积更大，但保留了可由文件系统寻址的插件包与原生模块。

@@ -20,6 +20,7 @@ describe('Desktop built entry snapshot', () => {
     const home = await mkdtemp(join(tmpdir(), 'dsh-desktop-snapshot-'))
     temporaryRoots.push(home)
     const { stdout, stderr } = await execFileAsync(electron as unknown as string, [
+      `--user-data-dir=${join(home, 'electron-user-data')}`,
       desktopEntry,
       '--dsh-desktop-smoke',
     ], {
@@ -57,6 +58,13 @@ describe('Desktop built entry snapshot', () => {
         "hasBootManifest": true,
         "loopback": true,
         "status": 200,
+        "updateCheck": {
+          "menuLabels": {
+            "en": "Check for Updates…",
+            "zh": "检查更新…",
+          },
+          "releasesUrl": "https://github.com/zhonghui5207/deepseek-harness-desktop/releases/latest",
+        },
       }
     `)
   })

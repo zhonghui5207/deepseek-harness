@@ -29,7 +29,11 @@ if (matches.length !== 1) {
 const home = await mkdtemp(join(tmpdir(), 'dsh-desktop-packaged-smoke-'))
 try {
   const executable = join(artifactRoot, matches[0])
-  const { stdout, stderr } = await execFileAsync(executable, ['--dsh-desktop-smoke'], {
+  const electronUserData = join(home, 'electron-user-data')
+  const { stdout, stderr } = await execFileAsync(executable, [
+    `--user-data-dir=${electronUserData}`,
+    '--dsh-desktop-smoke',
+  ], {
     cwd: home,
     env: {
       ...process.env,
@@ -46,10 +50,15 @@ try {
   if (line === undefined) throw new Error(`packaged Desktop emitted no smoke result:\n${stdout}`)
   const result = JSON.parse(line.slice(prefix.length))
   const shippedPresets = ['code', 'cordis', 'minimal', 'standard']
+  const shippedUpdateCheck = {
+    releasesUrl: 'https://github.com/zhonghui5207/deepseek-harness-desktop/releases/latest',
+    menuLabels: { en: 'Check for Updates…', zh: '检查更新…' },
+  }
   if (result.status !== 200 || result.contentType !== 'text/html; charset=utf-8'
     || result.hasBootManifest !== true || result.loopback !== true
     || JSON.stringify(result.agentPresetIds) !== JSON.stringify(shippedPresets)
-    || JSON.stringify(result.createdPresets) !== JSON.stringify(shippedPresets)) {
+    || JSON.stringify(result.createdPresets) !== JSON.stringify(shippedPresets)
+    || JSON.stringify(result.updateCheck) !== JSON.stringify(shippedUpdateCheck)) {
     throw new Error(`packaged Desktop smoke returned an invalid result: ${JSON.stringify(result)}`)
   }
   process.stdout.write('dsh packaged Desktop smoke: ok\n')
