@@ -43,7 +43,7 @@ No additional effect beyond `dsh-web-app`; the Desktop shell contributes no mode
 
 ## Known Limitations and Deferred Work
 
-- **Preview artifacts are unsigned and unnotarized** — macOS Gatekeeper and Windows SmartScreen can warn, and the default Electron icon remains until signing and product artwork are configured.
+- **Preview artifacts are unsigned and unnotarized** — macOS Gatekeeper and Windows SmartScreen can warn. The platform packages include the black-whale application icon.
 - **No automatic updates** — install a newer GitHub Release manually.
 - **Desktop does not watch user patch files** — changes to home-level or profile `cordis.patch.yml` require an application restart; client-bundle HMR can still operate when its separate rebuild watcher is running.
 - **The renderer currently uses loopback HTTP/WebSocket** — it does not use a `file://` renderer or Electron IPC carrier. The server is bound to `127.0.0.1` on an ephemeral port and is not exposed to the LAN.

@@ -3,6 +3,7 @@ productName: DSH Desktop
 asar: false
 
 directories:
+  buildResources: build
   output: ../../.artifacts/desktop
 
 files:
@@ -16,12 +17,14 @@ extraResources:
 
 mac:
   category: public.app-category.developer-tools
+  icon: build/icon.icns
   target:
     - dmg
     - zip
   artifactName: dsh-desktop-${version}-mac-${arch}.${ext}
 
 win:
+  icon: build/icon.ico
   target:
     - nsis
     - zip
@@ -29,6 +32,9 @@ win:
 
 linux:
   category: Development
+  executableName: dsh-desktop
+  icon: build/icon.png
+  syncDesktopName: true
   target:
     - AppImage
     - tar.gz

@@ -43,7 +43,7 @@ Desktop 挂载与 `dsh web` 相同的 `dsh-web-app` 组合包和模型可见 Web
 
 ## 已知限制与暂缓事项
 
-- **预览产物未签名、未公证**：macOS Gatekeeper 与 Windows SmartScreen 可能警告；在配置签名与产品图标前仍使用 Electron 默认图标。
+- **预览产物未签名、未公证**：macOS Gatekeeper 与 Windows SmartScreen 可能警告。各平台安装包均包含黑鲸鱼应用图标。
 - **没有自动更新**：需要手动安装新版 GitHub Release。
 - **Desktop 不监听用户 patch 文件**：home 级或 profile 的 `cordis.patch.yml` 发生变化后需要重启应用；客户端 bundle 的 HMR 在其独立重建 watcher 运行时仍可工作。
 - **renderer 当前使用回环 HTTP／WebSocket**：尚未使用 `file://` renderer 或 Electron IPC carrier。服务器绑定到临时端口上的 `127.0.0.1`，不会向局域网开放。

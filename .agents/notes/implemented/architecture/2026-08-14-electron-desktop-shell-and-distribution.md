@@ -28,7 +28,7 @@ The repository-placement decision is part of the product design. Desktop current
 - New and resumed sessions use the same installed system preset compositions as `dsh web`; an incomplete preset installation fails during Desktop startup instead of after an interaction.
 - Desktop and `dsh web` share `$DSH_HOME`, so model routes and credentials configured in either surface are immediately available to the other after restart.
 - The renderer still talks to a process-local loopback server. This adds no LAN exposure, but it is not an IPC security boundary and leaves transport consolidation for later.
-- Preview releases are unsigned and unnotarized, use the default Electron icon, have no updater, and build one native architecture per release runner.
+- Preview releases include the black-whale application icon but remain unsigned and unnotarized, have no updater, and build one native architecture per release runner.
 - Desktop loads user patch layers at startup but does not yet call `watchUserPatches`; changing those files requires restart.
 - Keeping the application in the monorepo avoids premature API stabilization. It also means Desktop releases follow core commits until a future split deliberately changes that ownership.
 
