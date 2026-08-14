@@ -23,7 +23,7 @@ pnpm --filter @deepseek-ai/dsh-desktop run smoke:packaged
 pnpm --filter @deepseek-ai/dsh-desktop run dist
 ```
 
-本包 manifest（元数据清单）有意列出 Web profile 所需的完整 workspace 对等依赖闭包，并依赖 `@deepseek-ai/dsh` 唯一提供安装后的 `config/agent-presets`。Desktop 启动时把该目录挂为系统 preset 根；缺少 `code`、`cordis`、`minimal` 或 `standard` 的安装会被直接拒绝。Electron Builder 不会从 monorepo 的环境链接中物化 workspace peer，因此 `pnpm run verify-runtime-closure` 会检查可执行闭包。打包冒烟使用全新的临时 Harness home 启动真正的未封装可执行文件，并分别通过每个系统 preset 创建 session，覆盖与“新建会话”和冷恢复相同的路径。
+本包 manifest（元数据清单）有意列出 Web profile 所需的完整 workspace 对等依赖闭包，并依赖 `@deepseek-ai/dsh` 唯一提供安装后的 `config/agent-presets`。Desktop 启动时把该目录挂为系统 preset 根；缺少 `code`、`cordis`、`minimal` 或 `standard` 的安装会被直接拒绝。Electron Builder 不会从 monorepo 的环境链接中物化 workspace peer，因此 `pnpm run verify-runtime-closure` 会检查可执行闭包。打包冒烟使用全新的临时 Harness home 启动真正的未封装可执行文件，并分别通过每个系统 preset 创建 session，覆盖与“新建会话”和冷恢复相同的路径。Linux 冒烟开始前，发布 workflow 会把 Electron 未封装的 `chrome-sandbox` helper 设置为安装后的 root 所有权与 `4755` 模式，而不会关闭 Chromium 沙箱。
 
 `asar` 目前保持关闭，因为 profile fallback 链接和 Cordis Loader 导入需要已安装应用中的真实包目录。因此安装包是面向用户的支持产物；npm 包只是发布输入，不是最终用户安装方式。
 
