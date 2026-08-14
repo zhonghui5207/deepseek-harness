@@ -12,7 +12,7 @@ The repository-placement decision is part of the product design. Desktop current
 
 ## Decision
 
-**Desktop remains an application under `apps/desktop`.** It is released from the same commit as the Harness packages. GitHub installers and archives are the end-user distribution surface; the npm package is an input to packaging. A `desktop-v*` tag creates a prerelease, while a manual Desktop Release run produces workflow artifacts for testing. A repository split is deferred until Desktop consumes a stable, versioned public runtime or carrier API and can release independently.
+**Desktop remains an application under `apps/desktop`, even when the public repository uses a Desktop-focused name.** It is released from the same commit as the Harness packages. GitHub installers and archives are the end-user distribution surface; the npm package is an input to packaging. A `desktop-v<version>` tag must match the application manifest and publishes a visible Latest Release, including checksums, only after every native build and packaged smoke passes. A manual Desktop Release run produces workflow artifacts for testing. A source split is deferred until Desktop consumes a stable, versioned public runtime or carrier API and can release independently.
 
 **The Electron main process boots the shipped `web` profile in-process.** It does not spawn the CLI. A launch-owned overlay binds `dsh-host-webserver` to `127.0.0.1` and port `0`, then the window loads the service's actual assigned URL. This reuses the tested HTTP/WebSocket protocol, frontend dist, settings, credentials, sessions, and plugin roster without a fixed-port collision. An IPC carrier remains a possible future transport change, not a prerequisite for a usable Desktop application.
 

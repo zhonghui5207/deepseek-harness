@@ -1,61 +1,74 @@
-# DeepSeek Harness
+# DSH Desktop
 
 English | [中文](README.zh.md)
 
-DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).
+<p align="center">
+  <img src="apps/desktop/build/icon.png" alt="DSH Desktop black-whale icon" width="168" height="168">
+</p>
 
-It uses an architecture where **everything is a plugin**, and is powered by [Cordis](https://github.com/cordiverse/cordis), whose design is described in [_A Programming Paradigm for Spatiotemporal Composability_](https://github.com/cordiverse/paper).
+<p align="center">
+  <a href="https://github.com/zhonghui5207/deepseek-harness-desktop/releases/latest"><img src="https://img.shields.io/github/v/release/zhonghui5207/deepseek-harness-desktop?display_name=tag" alt="Latest release"></a>
+  <a href="https://github.com/zhonghui5207/deepseek-harness-desktop/actions/workflows/desktop-release.yml"><img src="https://github.com/zhonghui5207/deepseek-harness-desktop/actions/workflows/desktop-release.yml/badge.svg" alt="Desktop Release"></a>
+</p>
 
-## Developer preview
+DSH Desktop packages the DeepSeek Harness Web interface and runtime as an installable Electron application. The Harness runtime, workspaces, sessions, tools, and model routing run locally; model requests follow the provider endpoints configured by the user.
 
-DeepSeek Harness is currently in _developer preview_ and is iterating rapidly. **THERE WILL BE COMPATIBILITY-BREAKING CHANGES.**
+## Download
 
-## Run
+Download the current installers and archives from [GitHub Releases](https://github.com/zhonghui5207/deepseek-harness-desktop/releases/latest).
 
-### Run from `npm`
+| Platform | Recommended file | Architecture |
+|---|---|---|
+| macOS | `.dmg` | Apple Silicon (`arm64`) |
+| Windows | `.exe` | `x64` |
+| Linux | `.AppImage` | `x86_64` |
 
-Install `Node.js`, then run:
+The current packages are unsigned and unnotarized. macOS Gatekeeper and Windows SmartScreen may display a warning; review the release and use the operating system's explicit open action when you trust the downloaded file.
 
-```sh
-npx @deepseek-ai/dsh web
+<a id="run"></a>
+
+## Install and configure
+
+1. Download the package for your platform. On macOS, open the DMG and move DSH Desktop to Applications. On Windows, run the installer. On Linux, make the AppImage executable before starting it.
+2. Open **Settings → Models** and add the API endpoint and model routes you want to use.
+3. Start a new session, choose the configured model, and select a workspace directory.
+
+For an OpenAI-compatible local gateway such as OCX Local Gateway, the values typically look like this:
+
+```text
+API URL: http://127.0.0.1:10100/v1
+API protocol: openai-responses
+Model ID: provider/model-name
 ```
 
-The command starts the Web UI, served at `http://127.0.0.1:3080` by default. See [Web UI guide](docs/user/guide/index.md).
+The protocol must match the endpoint implemented by the gateway, and the model ID must match the ID returned by that gateway. Store credentials through the application settings; never commit them to the repository.
 
-### Install the Desktop preview
+## Local data
 
-The [Desktop application](apps/desktop/README.md) packages the same UI for macOS, Windows, and Linux. The repository's Desktop Release workflow produces installers and platform archives; `desktop-v*` tags publish them as unsigned developer-preview GitHub Releases.
+Desktop and the `dsh` CLI use the same Harness home: `$DSH_HOME` when set, otherwise `~/.dsh`. Settings, credential references, sessions, model routes, and profiles therefore remain available across both interfaces. Keep this directory private because it contains local application state and may reference credentials.
 
-### Run from source
+The renderer is sandboxed and connects only to a loopback server owned by the Desktop process. The application does not expose that server to the LAN.
 
-To run from a repository checkout:
+## Updating
 
-```sh
-git clone https://github.com/deepseek-ai/deepseek-harness.git
-cd deepseek-harness
-pnpm install
-pnpm run build
-pnpm dsh web
-```
+Each published version is built and smoke-tested independently for macOS, Windows, and Linux. Install a newer [GitHub Release](https://github.com/zhonghui5207/deepseek-harness-desktop/releases) to update; the application does not silently replace itself.
 
-## Community and support
-
-- Feel free to submit feedback or bug reports through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).
-- Add the [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic to your plugin repository for discoverability.
-- Join <a href="https://discord.gg/Ycq5dCaS4">DeepSeek Harness Discord community</a>.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+<a id="run-from-source"></a>
 
 ## Development
 
-Start with the [development guide](docs/development.md) and [architecture documentation](docs/architecture.md).
+The repository is a monorepo because the Desktop application and Harness runtime currently release from the same source commit. See the [Desktop package reference](apps/desktop/README.md) for its architecture, security model, packaging commands, and known limitations.
 
-For agents, follow [AGENTS.md](AGENTS.md).
+```sh
+git clone https://github.com/zhonghui5207/deepseek-harness-desktop.git
+cd deepseek-harness-desktop
+pnpm install
+pnpm run build
+pnpm --filter @deepseek-ai/dsh-desktop run dev
+```
 
-## License
+Contributor setup and architecture are documented in the [development guide](docs/development.md) and [architecture reference](docs/architecture.md).
 
-[MIT](LICENSE)
+## License and attribution
 
-Third-party dependencies and their licenses are disclosed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+DSH Desktop is a community desktop distribution built with the DeepSeek Harness codebase and Cordis. The repository is licensed under [MIT](LICENSE); dependency notices are retained in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

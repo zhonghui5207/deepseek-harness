@@ -29,7 +29,7 @@ The package manifest deliberately lists the complete required workspace-peer clo
 
 ## Distribution and repository ownership
 
-[`Desktop Release`](../../.github/workflows/desktop-release.yml) builds native macOS, Windows, and Linux previews, smoke-tests each unpacked application, and uploads the installers and archives. A `desktop-v*` tag additionally publishes those files as a prerelease in the repository's GitHub Releases; a manual workflow run only produces downloadable workflow artifacts.
+[`Desktop Release`](../../.github/workflows/desktop-release.yml) builds native macOS, Windows, and Linux packages, smoke-tests each unpacked application, and uploads the installers and archives. A `desktop-v<version>` tag must match this package manifest exactly; after every native job passes, the workflow publishes the files and `SHA256SUMS.txt` as the repository's visible Latest Release. A manual workflow run only produces downloadable workflow artifacts.
 
 Desktop stays in this monorepo for now. Its profile bundles, client modules, Loader behavior, and release version all change with the Harness core, so a separate repository would duplicate the dependency manifest and coordinate every compatible core change across repositories without creating a stable boundary. Split it only after Desktop can consume a versioned public runtime/carrier API and has a genuinely independent release cadence.
 

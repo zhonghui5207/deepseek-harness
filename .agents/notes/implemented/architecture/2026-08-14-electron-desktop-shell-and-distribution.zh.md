@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决定
 
-**Desktop 继续作为 `apps/desktop` 下的应用。**它与 Harness 包从同一个 commit 发布。GitHub 安装包与归档是面向最终用户的分发面；npm 包只是打包输入。`desktop-v*` tag 会创建 prerelease，手动运行 Desktop Release 则生成用于测试的 workflow artifact。只有当 Desktop 消费稳定且带版本的公共 runtime 或 carrier API，并能独立发布时，才考虑拆分仓库。
+**即使公共仓库使用面向 Desktop 的名称，Desktop 仍是 `apps/desktop` 下的应用。**它与 Harness 包从同一个 commit 发布。GitHub 安装包与归档是面向最终用户的分发面；npm 包只是打包输入。`desktop-v<version>` tag 必须与应用 manifest 一致，并且只有在所有原生构建与打包冒烟测试通过后，才会发布包含校验和且公开可见的 Latest Release。手动运行 Desktop Release 会生成用于测试的工作流产物。只有当 Desktop 消费稳定且带版本的公共 runtime 或 carrier API，并能独立发布时，才考虑拆分源码仓库。
 
 **Electron 主进程在进程内启动随附的 `web` profile。**它不会生成 CLI 子进程。启动器拥有的 overlay 把 `dsh-host-webserver` 绑定到 `127.0.0.1` 和端口 `0`，窗口再加载该服务实际分配的 URL。这样可以复用已验证的 HTTP／WebSocket 协议、前端 dist、设置、凭据、session 与插件名录，同时不会发生固定端口冲突。IPC carrier 仍可作为未来的传输替换，但不是交付可用 Desktop 应用的前置条件。
 

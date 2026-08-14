@@ -235,6 +235,54 @@ describe('E2B e2e workflow', () => {
   })
 })
 
+describe('Desktop release workflow', () => {
+  it('publishes a version-matched Latest Release only after every native build', () => {
+    const workflow = loadWorkflow('.github/workflows/desktop-release.yml')
+    const plan = workflowJob(workflow, 'plan')
+    const build = workflowJob(workflow, 'build')
+    const release = workflowJob(workflow, 'release')
+    if (!Array.isArray(plan.steps) || !Array.isArray(release.steps)) {
+      throw new TypeError('Desktop release workflow must define plan and release steps')
+    }
+
+    const version = plan.steps.filter(isRecord).find(step => step.name === 'Verify release version')
+    const checksum = release.steps.filter(isRecord).find(step => step.name === 'Create checksums')
+    const create = release.steps.filter(isRecord).find(step => step.name === 'Create release')
+    if (!isRecord(version) || typeof version.run !== 'string' || !isRecord(create) || typeof create.run !== 'string') {
+      throw new TypeError('Desktop release workflow must verify the version and create the release')
+    }
+
+    expect(version).toMatchObject({
+      env: {
+        REF_NAME: '${{ github.ref_name }}',
+        REF_TYPE: '${{ github.ref_type }}',
+      },
+    })
+    expect(version.run).toContain('expected="desktop-v$version"')
+    expect(version.run).toContain('if [[ "$REF_NAME" != "$expected" ]]')
+    expect(build.needs).toBe('plan')
+    expect(release).toMatchObject({
+      if: "startsWith(github.ref, 'refs/tags/desktop-v')",
+      needs: ['plan', 'build'],
+      permissions: { contents: 'write' },
+    })
+    expect(checksum).toMatchObject({
+      'working-directory': '.artifacts/release',
+      run: 'sha256sum * > SHA256SUMS.txt',
+    })
+    expect(create).toMatchObject({
+      env: {
+        GH_REPO: '${{ github.repository }}',
+        VERSION: '${{ needs.plan.outputs.version }}',
+      },
+    })
+    expect(create.run).toContain('--latest')
+    expect(create.run).toContain('--title "DSH Desktop v$VERSION"')
+    expect(create.run).toContain('--verify-tag')
+    expect(create.run).not.toContain('--prerelease')
+  })
+})
+
 describe('Python release workflows', () => {
   it('keeps complete wheel validation separate from protected public publication', () => {
     const workflow = loadWorkflow('.github/workflows/python-release.yml')
