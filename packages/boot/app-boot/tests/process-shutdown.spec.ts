@@ -53,6 +53,10 @@ describe('process shutdown', () => {
 
       expect(process.exitCode).toBe(7)
       expect(exit).not.toHaveBeenCalled()
+
+      shutdown.interrupt(130)
+      expect(exit).toHaveBeenCalledOnce()
+      expect(exit).toHaveBeenCalledWith(130)
     } finally {
       process.exitCode = originalExitCode
     }

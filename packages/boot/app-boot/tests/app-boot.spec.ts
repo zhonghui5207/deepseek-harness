@@ -668,6 +668,27 @@ describe('boot', () => {
     try {
       expect(ctx.get('anchoredPluginLoaded')).toBe(true)
       expect(ctx.get('nestedPluginLoaded')).toBe(true)
+
+      const internal = ctx.loader.internal
+      if (internal === undefined) throw new Error('boot installed no public module adapter')
+      const dataModule = await internal.import('data:text/javascript,export default 7', '', {}) as { default?: unknown }
+      expect(dataModule.default).toBe(7)
+      const baseModule = await internal.import('anchored-plugin', '', {}) as { apply?: unknown }
+      expect(baseModule.apply).toBeTypeOf('function')
+      const configParent = pathToFileURL(join(dir, 'entry.mjs')).href
+      await expect(internal.import('./missing.mjs', configParent, {})).rejects.toThrow()
+      await expect(internal.import('missing-bare-plugin', configParent, {})).rejects.toThrow()
+
+      const RootInclude = ctx.loader.builtins.include as unknown as {
+        prototype: { import(this: { ctx: Context }, name: string): unknown }
+      }
+      ctx.loader.internal = undefined
+      try {
+        const imported = await RootInclude.prototype.import.call({ ctx }, 'anchored-plugin') as { apply?: unknown }
+        expect(imported.apply).toBeTypeOf('function')
+      } finally {
+        ctx.loader.internal = internal
+      }
     } finally {
       await ctx.fiber.dispose()
     }
