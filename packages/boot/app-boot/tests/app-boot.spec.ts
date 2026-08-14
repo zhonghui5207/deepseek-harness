@@ -625,6 +625,75 @@ describe('boot', () => {
     }
   })
 
+  it('resolves an anchored bare plugin without Node internal-loader access', async () => {
+    const dir = tmp()
+    const harness = tmp()
+    const harnessPlugin = join(harness, 'node_modules', 'anchored-plugin')
+    const nestedPlugin = join(harness, 'node_modules', 'nested-plugin')
+    mkdirSync(harnessPlugin, { recursive: true })
+    mkdirSync(nestedPlugin, { recursive: true })
+    writeFileSync(join(harnessPlugin, 'package.json'), JSON.stringify({
+      name: 'anchored-plugin',
+      type: 'module',
+      exports: './index.mjs',
+    }))
+    writeFileSync(join(harnessPlugin, 'index.mjs'), [
+      'export const inject = ["loader"]',
+      'export async function apply(ctx) {',
+      '  ctx.provide("anchoredPluginLoaded", true)',
+      '  await ctx.loader.create({ name: "nested-plugin" })',
+      '}',
+      '',
+    ].join('\n'))
+    writeFileSync(join(nestedPlugin, 'package.json'), JSON.stringify({
+      name: 'nested-plugin',
+      type: 'module',
+      exports: './index.mjs',
+    }))
+    writeFileSync(join(nestedPlugin, 'index.mjs'), [
+      'export function apply(ctx) {',
+      '  ctx.provide("nestedPluginLoaded", true)',
+      '}',
+      '',
+    ].join('\n'))
+    writeFileSync(join(dir, 'cordis.yml'), '- id: anchored\n  name: anchored-plugin\n')
+
+    const ctx = await boot(
+      NAME,
+      join(dir, 'cordis.yml'),
+      undefined,
+      (hostCtx) => { hostCtx.loader.internal = undefined },
+      pathToFileURL(join(harness, 'entry.mjs')).href,
+    )
+    try {
+      expect(ctx.get('anchoredPluginLoaded')).toBe(true)
+      expect(ctx.get('nestedPluginLoaded')).toBe(true)
+
+      const internal = ctx.loader.internal
+      if (internal === undefined) throw new Error('boot installed no public module adapter')
+      const dataModule = await internal.import('data:text/javascript,export default 7', '', {}) as { default?: unknown }
+      expect(dataModule.default).toBe(7)
+      const baseModule = await internal.import('anchored-plugin', '', {}) as { apply?: unknown }
+      expect(baseModule.apply).toBeTypeOf('function')
+      const configParent = pathToFileURL(join(dir, 'entry.mjs')).href
+      await expect(internal.import('./missing.mjs', configParent, {})).rejects.toThrow()
+      await expect(internal.import('missing-bare-plugin', configParent, {})).rejects.toThrow()
+
+      const RootInclude = ctx.loader.builtins.include as unknown as {
+        prototype: { import(this: { ctx: Context }, name: string): unknown }
+      }
+      ctx.loader.internal = undefined
+      try {
+        const imported = await RootInclude.prototype.import.call({ ctx }, 'anchored-plugin') as { apply?: unknown }
+        expect(imported.apply).toBeTypeOf('function')
+      } finally {
+        ctx.loader.internal = internal
+      }
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('runs host preparation before the Loader tree mounts', async () => {
     const dir = tmp()
     writeFileSync(join(dir, 'noop.mjs'), 'export const name = "noop"\nexport function apply() {}\n')

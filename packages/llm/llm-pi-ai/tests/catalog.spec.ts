@@ -186,6 +186,42 @@ describe('hand-declared providers', () => {
     expect(resolved.get('acme-gateway')?.configuredMaxTokens.get('sized')).toBe(512)
   })
 
+  it('tracks response models that omit the output-cap field without advertising a request default', async () => {
+    const resolved = resolveProfiles({
+      gateway: {
+        api: 'openai-responses',
+        baseURL: 'https://gateway.test/v1',
+        models: [
+          { id: 'strict', maxTokens: 128_000, omitMaxOutputTokens: true },
+          { id: 'standard', maxTokens: 4096 },
+        ],
+      },
+    })
+    const profile = resolved.get('gateway')
+    expect(profile?.omitMaxOutputTokens).toEqual(new Set(['strict']))
+    expect(profile?.configuredMaxTokens.get('strict')).toBeUndefined()
+    expect(profile?.configuredMaxTokens.get('standard')).toBe(4096)
+
+    const ctx = await harness({ providers: {
+      gateway: {
+        api: 'openai-responses',
+        baseURL: 'https://gateway.test/v1',
+        models: [{ id: 'strict', maxTokens: 128_000, omitMaxOutputTokens: true }],
+      },
+    } })
+    expect((await ctx.llm.resolveModelInfo('gateway', 'strict')).defaultMaxTokens).toBeUndefined()
+  })
+
+  it('rejects omitMaxOutputTokens outside OpenAI Responses', () => {
+    expect(() => resolveProfiles({
+      gateway: {
+        api: 'openai-completions',
+        baseURL: 'https://gateway.test/v1',
+        models: [{ id: 'wrong-protocol', omitMaxOutputTokens: true }],
+      },
+    })).toThrow(/omitMaxOutputTokens.*openai-completions.*only on openai-responses/)
+  })
+
   it('takes a model’s declared modalities, then the catalog’s, then the route’s', () => {
     const vision = getBuiltinModels('anthropic').find(model => model.input.includes('image'))
     if (vision === undefined) throw new Error('the installed catalog ships no anthropic vision model')

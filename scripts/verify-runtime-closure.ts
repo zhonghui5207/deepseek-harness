@@ -5,7 +5,7 @@
  */
 import { globSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { relative, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 
 interface PackageManifest {
@@ -27,6 +27,7 @@ const { values } = parseArgs({
   options: { manifest: { type: 'string' } },
 })
 const runtimeManifestPath = resolve(root, values.manifest ?? 'python/sdk-runtime/package.json')
+const runtimeManifestDisplay = relative(root, runtimeManifestPath)
 const runtimeManifest = await loadManifest(runtimeManifestPath)
 const runtimeName = runtimeManifest.name ?? 'python/sdk-runtime'
 const workspace = await loadWorkspacePackages()
@@ -65,12 +66,12 @@ for (let index = 0; index < queue.length; index += 1) {
 }
 
 if (failures.length > 0) {
-  console.error('verify-runtime-closure: required workspace peers are missing from python/sdk-runtime dependencies:')
+  console.error(`verify-runtime-closure: required workspace peers are missing from ${runtimeManifestDisplay} dependencies:`)
   for (const failure of failures) console.error(`  ${failure}`)
   process.exit(1)
 }
 
-console.log(`verify-runtime-closure: ${queue.length} workspace packages form a closed runtime dependency graph.`)
+console.log(`verify-runtime-closure: ${runtimeName} closes over ${queue.length} workspace packages.`)
 
 async function loadWorkspacePackages(): Promise<Map<string, WorkspacePackage>> {
   const paths = globSync(['packages/*/*/package.json', 'vendor/*/package.json'], { cwd: root })

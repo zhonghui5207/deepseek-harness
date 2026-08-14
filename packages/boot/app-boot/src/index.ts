@@ -1,5 +1,5 @@
 /**
- * Shared boot glue for the app bins (`dsh`, `dsh-acp-demo`): load the gitignored
+ * Shared boot glue for the app launchers (`dsh`, Desktop, `dsh-acp-demo`): load the gitignored
  * `.env`, install the fail-loud Loader guards, resolve the config path (snapshot-aware), load the
  * optional user patch layers from the Harness home (`~/.dsh`), expose its path resolver to
  * config expressions, and drive the Cordis Loader against a leaf `cordis.yml` until the tree settles.
@@ -7,6 +7,7 @@
  */
 
 import { pathToFileURL } from 'node:url'
+import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { parseEnv } from 'node:util'
 import { basename, dirname, isAbsolute, resolve } from 'node:path'
@@ -48,6 +49,12 @@ export {
   type ProfileLayer,
   type ProfileManifest,
 } from './profile.ts'
+
+export {
+  createProcessShutdown,
+  PROCESS_SHUTDOWN_TIMEOUT_MS,
+  type ProcessShutdown,
+} from './process-shutdown.ts'
 
 /**
  * Resolve the config to boot. Replay swaps a `cordis.yml` basename for
@@ -489,19 +496,49 @@ export async function mountRootInclude(
   patches: readonly PatchOptions[] = [],
   bareModuleBaseUrl?: string,
 ): Promise<Entry | undefined> {
-  ctx.loader.builtins.include = bareModuleBaseUrl === undefined
-    ? Include
-    : class HostResolvedRootInclude extends Include {
+  if (bareModuleBaseUrl === undefined) {
+    ctx.loader.builtins.include = Include
+  } else {
+    const requireFromBase = createRequire(bareModuleBaseUrl)
+    if (ctx.loader.internal === undefined) {
+      // Electron does not expose Node's internal ESM loader. Install an
+      // import-only public-API adapter so every Loader subtree, including rows
+      // created dynamically by plugins, still resolves against its own base.
+      // Module HMR remains unavailable because the adapter intentionally owns no
+      // Node load cache or resolver internals.
+      ctx.loader.internal = {
+        import: async (specifier: string, parentURL: string): Promise<unknown> => {
+          if (specifier.startsWith('node:') || specifier.startsWith('data:') || specifier.startsWith('file:')) {
+            return import(specifier) as Promise<unknown>
+          }
+          const parentRequire = createRequire(parentURL || bareModuleBaseUrl)
+          let resolved: string
+          try {
+            resolved = parentRequire.resolve(specifier)
+          } catch (error) {
+            if (specifier.startsWith('.')) throw error
+            try {
+              resolved = requireFromBase.resolve(specifier)
+            } catch {
+              throw error
+            }
+          }
+          return import(pathToFileURL(resolved).href) as Promise<unknown>
+        },
+      } as unknown as NonNullable<typeof ctx.loader.internal>
+    }
+    ctx.loader.builtins.include = class HostResolvedRootInclude extends Include {
       override import(name: string, getOuterStack?: () => string[]): unknown {
         const specifier = isAbsolute(name) ? pathToFileURL(name).href : name
-        if (name.startsWith('.') || name.startsWith('cordis:')) return super.import(specifier, getOuterStack)
+        if (name.startsWith('.') || name.startsWith('cordis:') || isAbsolute(name)) {
+          return super.import(specifier, getOuterStack)
+        }
         const internal = this.ctx.loader.internal
-        /* v8 ignore next -- Node supplies the internal loader; this preserves the
-           original diagnostic for hypothetical embedders without it. */
-        if (internal === undefined) return super.import(specifier, getOuterStack)
-        return internal.import(specifier, bareModuleBaseUrl, {})
+        if (internal !== undefined) return internal.import(specifier, bareModuleBaseUrl, {})
+        return import(pathToFileURL(requireFromBase.resolve(specifier)).href) as Promise<unknown>
       }
     }
+  }
   // `cordis:group` alongside it: a group row is how a composition gives one
   // `isolate` realm to a provider and its consumers together, and an agent
   // preset living outside this workspace cannot resolve `@deepseek-ai/cordis-plugin-group`

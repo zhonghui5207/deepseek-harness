@@ -198,6 +198,35 @@ describe('PiAiAdapter provider routing', () => {
     expect(server.paths).toEqual(['/v1/responses'])
   })
 
+  it('omits max_output_tokens only for configured OpenAI Responses models', async () => {
+    const server = await mockServer([
+      { status: 401, body: JSON.stringify({ error: { message: 'expected mock failure' } }) },
+      { status: 401, body: JSON.stringify({ error: { message: 'expected mock failure' } }) },
+    ])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        gateway: {
+          apiKeyEnv: 'PI_TEST_KEY',
+          api: 'openai-responses',
+          baseURL: `${server.url}/v1`,
+          models: [
+            { id: 'strict', maxTokens: 128_000, omitMaxOutputTokens: true },
+            { id: 'standard', maxTokens: 128_000 },
+          ],
+        },
+      },
+    })
+
+    await assemble(ctx, { provider: 'gateway', model: 'strict', messages: [], maxTokens: 64 })
+    await assemble(ctx, { provider: 'gateway', model: 'standard', messages: [], maxTokens: 64 })
+
+    expect(server.paths).toEqual(['/v1/responses', '/v1/responses'])
+    expect(server.requests[0]).not.toHaveProperty('max_output_tokens')
+    expect(server.requests[1]).toMatchObject({ max_output_tokens: 64 })
+  })
+
   it('resolves an attachment service mounted after the adapter when dispatching an image', async () => {
     const server = await mockServer([{ status: 401, body: JSON.stringify({ error: { message: 'expected mock failure' } }) }])
     const attachmentId = AttachmentId(`sha256:${'a'.repeat(64)}`)

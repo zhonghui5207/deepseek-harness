@@ -4,8 +4,8 @@
  * index transform taps, and the single fallback seat for everything no route
  * claims). Knows no harness concepts and serves no files; the composing
  * application's frontend plugin owns dist serving through the fallback hook.
- * Web shape only — Electron loads dist over file:// and carries fetch over an
- * IPC bridge. This package never prints: the URL line belongs to the shell.
+ * Browsers and the sandboxed Desktop renderer both use this carrier; this
+ * package never prints because URL presentation belongs to the application.
  */
 
 import { createServer } from 'node:http'
@@ -50,7 +50,7 @@ export interface Config {
 }
 
 /**
- * The browser HTTP carrier service. Activation listens immediately. Route
+ * The Web HTTP carrier service. Activation listens immediately. Route
  * registration order does not affect requests because configured named routes
  * must be distinct, and the fallback handler answers anything not yet claimed
  * during startup with 404 until its owner registers. A listen failure rejects

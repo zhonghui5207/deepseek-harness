@@ -208,11 +208,19 @@ export interface PiAiModelProfile {
   contextWindow?: number
   /**
    * Maximum output tokens. Configuring one also makes it this model's
-   * per-request default; a value inherited from the installed catalog, or the
-   * route's fallback, is the model's capability and never becomes a request
-   * default on its own.
+   * per-request default unless {@link omitMaxOutputTokens} disables the wire
+   * field; a value inherited from the installed catalog, or the route's
+   * fallback, is the model's capability and never becomes a request default
+   * on its own.
    */
   maxTokens?: number
+  /**
+   * Remove `max_output_tokens` from the final `openai-responses` payload.
+   * This is for compatible gateways whose target rejects that otherwise
+   * standard field; the model's output capacity still sizes pi-ai's context
+   * calculation, but neither configured nor per-call caps reach the provider.
+   */
+  omitMaxOutputTokens?: boolean
   /**
    * Request modalities this model accepts. Absent — or empty, which describes
    * a model that accepts nothing and so states no answer either — keeps the
@@ -433,6 +441,8 @@ export interface RouteCatalog {
    * picked, so only an explicit configuration lands here.
    */
   configuredMaxTokens: ReadonlyMap<string, number>
+  /** Model ids whose final `openai-responses` payload omits `max_output_tokens`. */
+  omitMaxOutputTokens: ReadonlySet<string>
 }
 
 /**
@@ -489,6 +499,7 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
     || request.compat?.supportsReasoningEffort !== undefined
   const seen = new Set<string>()
   const configuredMaxTokens = new Map<string, number>()
+  const omitMaxOutputTokens = new Set<string>()
   const models = entries.map((entry) => {
     if (entry.id.length === 0) invalid(provider, 'has a model with an empty id')
     if (seen.has(entry.id)) invalid(provider, `lists model "${entry.id}" more than once`)
@@ -515,9 +526,19 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
     if (!Number.isInteger(maxTokens) || maxTokens <= 0) {
       invalid(provider, `model "${entry.id}" maxTokens must be a positive integer`)
     }
+    if (entry.omitMaxOutputTokens === true) {
+      if (api !== 'openai-responses') {
+        invalid(provider, `model "${entry.id}" sets omitMaxOutputTokens, but its api is "${api}";`
+          + ' the max_output_tokens field exists only on openai-responses')
+      }
+      omitMaxOutputTokens.add(entry.id)
+    }
     // Only a value the profile named is a deployment choice; the catalog's is
-    // the model's capability and stays out of request defaults.
-    if (entry.maxTokens !== undefined) configuredMaxTokens.set(entry.id, entry.maxTokens)
+    // the model's capability and stays out of request defaults. A route that
+    // cannot send the field likewise exposes no default cap to its callers.
+    if (entry.maxTokens !== undefined && entry.omitMaxOutputTokens !== true) {
+      configuredMaxTokens.set(entry.id, entry.maxTokens)
+    }
     return {
       // The installed entry lays the floor, and the fields below override it.
       // Enumerating instead would silently drop every `Model` field this
@@ -542,5 +563,5 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
     invalid(provider, 'sets compat reasoning switches, but no model on the route speaks openai-completions;'
       + ' thinkingFormat and supportsReasoningEffort exist only on that protocol')
   }
-  return { models, configuredMaxTokens }
+  return { models, configuredMaxTokens, omitMaxOutputTokens }
 }

@@ -999,11 +999,19 @@ export interface PiAiModelProfile {
   contextWindow?: number
   /**
    * Maximum output tokens. Configuring one also makes it this model's
-   * per-request default; a value inherited from the installed catalog, or the
-   * route's fallback, is the model's capability and never becomes a request
-   * default on its own.
+   * per-request default unless {@link omitMaxOutputTokens} disables the wire
+   * field; a value inherited from the installed catalog, or the route's
+   * fallback, is the model's capability and never becomes a request default
+   * on its own.
    */
   maxTokens?: number
+  /**
+   * Remove `max_output_tokens` from the final `openai-responses` payload.
+   * This is for compatible gateways whose target rejects that otherwise
+   * standard field; the model's output capacity still sizes pi-ai's context
+   * calculation, but neither configured nor per-call caps reach the provider.
+   */
+  omitMaxOutputTokens?: boolean
   /**
    * Request modalities this model accepts. Absent — or empty, which describes
    * a model that accepts nothing and so states no answer either — keeps the
@@ -1081,7 +1089,7 @@ type WithheldThinkingFormat = 'chat-template' | 'qwen-chat-template'
 
 依赖：`Api`（`@earendil-works/pi-ai`）· `CacheRetention`（`@earendil-works/pi-ai`）· `Model`（`@earendil-works/pi-ai`）· `ModelThinkingLevel`（`@earendil-works/pi-ai`）· `OpenAICompletionsCompat`（`@earendil-works/pi-ai`）· [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets`（`@earendil-works/pi-ai`）· `Transport`（`@earendil-works/pi-ai`）
 
-来源：[`packages/llm/llm-pi-ai/src/config.ts:172`](../packages/llm/llm-pi-ai/src/config.ts)
+来源：[`packages/llm/llm-pi-ai/src/config.ts:174`](../packages/llm/llm-pi-ai/src/config.ts)
 
 <a id="deepseek-aidsh-llm-replay"></a>
 

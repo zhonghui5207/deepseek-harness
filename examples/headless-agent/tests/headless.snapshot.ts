@@ -54,6 +54,7 @@ const dshBinScript = fileURLToPath(new URL('../../../apps/cli/src/bin.ts', impor
 const tsconfigPath = fileURLToPath(new URL('../../../tsconfig.json', import.meta.url))
 const reasoningConfigPath = fileURLToPath(new URL('./fixtures/cli.cordis.yml', import.meta.url))
 const deepseekDefaultsConfigPath = fileURLToPath(new URL('./fixtures/deepseek-defaults.cordis.yml', import.meta.url))
+const outputCapOmissionConfigPath = fileURLToPath(new URL('./fixtures/pi-ai-output-cap-omission.cordis.yml', import.meta.url))
 const headlessOverlayPath = fileURLToPath(new URL('./fixtures/headless-profile.cordis.yml', import.meta.url))
 const headlessSessionExpected = join(snapshotsDir, 'headless-profile', 'session.expected.jsonl')
 const headlessFailureExpected = join(snapshotsDir, 'headless-profile', 'stderr.expected.txt')
@@ -69,14 +70,14 @@ interface PersistedLog {
   readonly header: JsonObject
 }
 
-interface DeepSeekDefaultsServer {
+interface CapturedServer {
   readonly url: string
   readonly requests: JsonObject[]
   close(): Promise<void>
 }
 
 /** Serve one deterministic DeepSeek-compatible response while retaining its request body. */
-async function deepseekDefaultsServer(): Promise<DeepSeekDefaultsServer> {
+async function deepseekDefaultsServer(): Promise<CapturedServer> {
   const requests: JsonObject[] = []
   const server = createServer((request: IncomingMessage, response: ServerResponse) => {
     let body = ''
@@ -107,6 +108,59 @@ async function deepseekDefaultsServer(): Promise<DeepSeekDefaultsServer> {
   if (address === null || typeof address === 'string') throw new Error('DeepSeek defaults snapshot server has no port')
   return {
     url: `http://127.0.0.1:${address.port}`,
+    requests,
+    close: () => new Promise(resolve => server.close(() => { resolve() })),
+  }
+}
+
+/** Serve one deterministic OpenAI Responses completion while retaining its request body. */
+async function strictResponsesServer(): Promise<CapturedServer> {
+  const requests: JsonObject[] = []
+  const text = 'RESPONSES_OK'
+  const message = {
+    id: 'msg_snapshot',
+    type: 'message',
+    status: 'completed',
+    role: 'assistant',
+    content: [{ type: 'output_text', annotations: [], logprobs: [], text }],
+  }
+  const completed = {
+    id: 'resp_snapshot',
+    object: 'response',
+    created_at: 1,
+    status: 'completed',
+    model: 'strict-model',
+    output: [message],
+    usage: {
+      input_tokens: 3,
+      input_tokens_details: { cached_tokens: 0 },
+      output_tokens: 1,
+      output_tokens_details: { reasoning_tokens: 0 },
+      total_tokens: 4,
+    },
+  }
+  const events = [
+    { type: 'response.created', response: { ...completed, status: 'in_progress', output: [] } },
+    { type: 'response.output_item.added', output_index: 0, item: { ...message, status: 'in_progress', content: [] } },
+    { type: 'response.output_text.delta', output_index: 0, content_index: 0, delta: text },
+    { type: 'response.output_item.done', output_index: 0, item: message },
+    { type: 'response.completed', response: completed },
+  ]
+  const server = createServer((request: IncomingMessage, response: ServerResponse) => {
+    let body = ''
+    request.setEncoding('utf8')
+    request.on('data', (chunk: string) => { body += chunk })
+    request.on('end', () => {
+      requests.push(JSON.parse(body) as JsonObject)
+      response.writeHead(200, { 'content-type': 'text/event-stream' })
+      response.end(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''))
+    })
+  })
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  const address = server.address()
+  if (address === null || typeof address === 'string') throw new Error('Responses snapshot server has no port')
+  return {
+    url: `http://127.0.0.1:${address.port}/v1`,
     requests,
     close: () => new Promise(resolve => server.close(() => { resolve() })),
   }
@@ -562,6 +616,46 @@ describe('headless stream-json snapshots', () => {
         maxTokens: true,
         reasoningEffort: true,
       })
+    } finally {
+      await server.close()
+    }
+  }, LOADER_SMOKE_TEST_TIMEOUT_MS)
+
+  it('omits a strict Responses output cap through the assembled one-shot app', async () => {
+    const server = await strictResponsesServer()
+    try {
+      const result = await runLoaderSmoke({
+        label: 'pi-ai output-cap omission headless snapshot',
+        tempDirPrefix: 'headless-snapshot-pi-ai-output-cap-',
+        binScript,
+        libBinScript: binScript,
+        configPath: outputCapOmissionConfigPath,
+        binArgs: [outputCapOmissionConfigPath, 'return the deterministic response'],
+        tsconfigPath,
+        env: {
+          PI_SNAPSHOT_KEY: 'snapshot-key',
+          DSH_SNAPSHOT_BASE_URL: server.url,
+          NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'].filter(Boolean).join(' '),
+        },
+      })
+
+      expect(result.stderr).toBe('')
+      expect(result.stdout).toContain('RESPONSES_OK')
+      expect(server.requests).toHaveLength(1)
+      const request = server.requests[0] ?? {}
+      expect({
+        model: request.model,
+        store: request.store,
+        stream: request.stream,
+        hasMaxOutputTokens: 'max_output_tokens' in request,
+      }).toMatchInlineSnapshot(`
+        {
+          "hasMaxOutputTokens": false,
+          "model": "strict-model",
+          "store": false,
+          "stream": true,
+        }
+      `)
     } finally {
       await server.close()
     }
