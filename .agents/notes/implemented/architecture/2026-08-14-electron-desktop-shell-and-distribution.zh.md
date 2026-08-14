@@ -28,7 +28,7 @@ Status: implemented
 - 新建和恢复的 session 使用与 `dsh web` 相同的已安装系统 preset 组合；preset 安装不完整会在 Desktop 启动时失败，而不是等到用户交互后才暴露。
 - Desktop 与 `dsh web` 共用 `$DSH_HOME`，因此任一表层配置的模型路由与凭据都会在重启后直接出现在另一表层。
 - renderer 仍连接进程本地回环服务器。它不增加局域网暴露，但也不是 IPC 安全边界，传输收敛留待以后处理。
-- 预览版未签名、未公证，使用 Electron 默认图标，没有更新器，并且每个发布 runner 只构建一个原生架构。
+- 预览版包含黑鲸鱼应用图标，但仍未签名、未公证，没有更新器，并且每个发布 runner 只构建一个原生架构。
 - Desktop 在启动时加载用户 patch 层，但尚未调用 `watchUserPatches`；这些文件变更后需要重启。
 - 应用保留在 monorepo，避免过早稳定公共 API；这也意味着在未来有意拆分归属前，Desktop 发布会跟随核心 commit。
 
