@@ -69,7 +69,7 @@
               off:
               high: high
               max: ultra
-      # OpenAI Responses gateway whose upstream rejects an output cap.
+      # OpenAI Responses gateway whose target endpoint rejects an output cap.
       strict-responses-gateway:
         apiKeyEnv: STRICT_RESPONSES_API_KEY
         api: openai-responses
@@ -100,7 +100,7 @@ profile 的 `models` 列表是*替换*该路由已安装 catalog，而不是扩�
 
 ### OpenAI Responses 输出上限省略
 
-`omitMaxOutputTokens: true` 会在 pi-ai 构造最终 payload 后，为该条精确的 `openai-responses` 模型删除 `max_output_tokens`。它只用于上游拒绝这一标准字段的兼容网关。模型的 `maxTokens` 仍用于描述输出能力并参与上下文计算，但不再成为 Harness 请求默认值，显式的单次调用上限也会被省略，因此输出长度由提供方决定。在其他协议上设置该开关会使 profile 解析失败，而不是静默失效。
+`omitMaxOutputTokens: true` 会在 pi-ai 构造最终 payload 后，为该条精确的 `openai-responses` 模型删除 `max_output_tokens`。它只用于目标端点拒绝这一标准字段的兼容网关。模型的 `maxTokens` 仍用于描述输出能力并参与上下文计算，但不再成为 Harness 请求默认值，显式的单次调用上限也会被省略，因此输出长度由提供方决定。在其他协议上设置该开关会使 profile 解析失败，而不是静默失效。
 
 条目与已安装 catalog 都没有给出尺寸的模型，会采用该路由的 `defaultContextWindow`（262,144）与 `defaultMaxTokens`（32,768），因此一份只公布 id 的列表同样能产出可服务的路由。两个回退值本质上都是猜测，这正是它们作为路由字段、供网关服务更小模型的部署一次性更正的原因，而不是埋在适配器里的常量；回退值只用于给模型定尺寸，绝不会变成单次请求上限。
 

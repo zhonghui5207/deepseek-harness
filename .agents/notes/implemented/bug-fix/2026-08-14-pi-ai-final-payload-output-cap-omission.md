@@ -6,9 +6,9 @@ English | [中文](2026-08-14-pi-ai-final-payload-output-cap-omission.zh.md)
 
 ## Problem
 
-Some OpenAI Responses-compatible gateways route selected models to an upstream with a strict request allowlist that rejects `max_output_tokens`. Harness request producers regularly supply `GenerateOptions.maxTokens`, and pi-ai's `streamSimple()` also restores an absent value from `Model.maxTokens`, so removing the option before adapter dispatch cannot remove the final wire field. Every conversation and auxiliary request to such a model fails with 400 even though the same gateway and model work when the field is absent.
+Some OpenAI Responses-compatible gateways route selected models to a target backend with a strict request allowlist that rejects `max_output_tokens`. Harness request producers regularly supply `GenerateOptions.maxTokens`, and pi-ai's `streamSimple()` also restores an absent value from `Model.maxTokens`, so removing the option before adapter dispatch cannot remove the final wire field. Every conversation and auxiliary request to such a model fails with 400 even though the same gateway and model work when the field is absent.
 
-The compatibility rule is model-specific. One declared route may serve the strict upstream beside models whose providers accept and enforce `max_output_tokens`, so a route-wide omission would discard valid caps from unrelated requests.
+The compatibility rule is model-specific. One declared route may serve the strict backend beside models whose providers accept and enforce `max_output_tokens`, so a route-wide omission would discard valid caps from unrelated requests.
 
 ## Decision
 
@@ -20,7 +20,7 @@ The [declared-provider catalog](../architecture/2026-08-03-pi-ai-declared-provid
 
 **Strip `GenerateOptions.maxTokens` through the `llm/stream` waterfall.** This runs before `streamSimple()`, which replaces the missing value from `Model.maxTokens`; the final payload still carries `max_output_tokens`.
 
-**Infer strict behavior from a gateway URL or model id.** Endpoint ownership and upstream compatibility are deployment facts. Hardcoded recognition would silently change behavior when a proxy moves or serves the same id through another backend.
+**Infer strict behavior from a gateway URL or model id.** Endpoint ownership and compatibility are deployment facts. Hardcoded recognition would silently change behavior when a proxy moves or serves the same id through another backend.
 
 **Patch the observed gateway alone.** Gateway-side stripping fixes one installation but leaves the adapter unable to describe another strict Responses endpoint. The per-model declaration keeps the compatibility decision with the route configuration and remains independently testable.
 

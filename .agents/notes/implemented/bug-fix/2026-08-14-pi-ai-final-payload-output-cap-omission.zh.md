@@ -6,9 +6,9 @@ Status: implemented
 
 ## Problem
 
-部分兼容 OpenAI Responses 的网关会把特定模型路由到采用严格请求白名单的上游，而该上游拒绝 `max_output_tokens`。Harness 的请求生产方通常会提供 `GenerateOptions.maxTokens`，pi-ai 的 `streamSimple()` 还会从 `Model.maxTokens` 恢复缺省值，因此在适配器分派前删除该选项无法移除最终协议字段。即使同一网关与模型在字段缺席时可以工作，所有发往该模型的会话请求和辅助请求仍会以 400 失败。
+部分兼容 OpenAI Responses 的网关会把特定模型路由到采用严格请求白名单的目标后端，而该后端拒绝 `max_output_tokens`。Harness 的请求生产方通常会提供 `GenerateOptions.maxTokens`，pi-ai 的 `streamSimple()` 还会从 `Model.maxTokens` 恢复缺省值，因此在适配器分派前删除该选项无法移除最终协议字段。即使同一网关与模型在字段缺席时可以工作，所有发往该模型的会话请求和辅助请求仍会以 400 失败。
 
-这条兼容规则归属于模型。同一条声明路由可以同时服务严格上游，以及其提供方接受并执行 `max_output_tokens` 的模型；在整条路由上省略字段会丢弃其他请求的有效上限。
+这条兼容规则归属于模型。同一条声明路由可以同时服务严格后端，以及其提供方接受并执行 `max_output_tokens` 的模型；在整条路由上省略字段会丢弃其他请求的有效上限。
 
 ## Decision
 
@@ -20,7 +20,7 @@ Status: implemented
 
 **通过 `llm/stream` waterfall 删除 `GenerateOptions.maxTokens`。** 该操作发生在 `streamSimple()` 之前，而后者会从 `Model.maxTokens` 补回缺失值；最终 payload 仍会携带 `max_output_tokens`。
 
-**根据网关 URL 或模型 id 推断严格行为。** 端点归属和上游兼容性是部署事实。硬编码识别会在 proxy 迁移或通过另一后端服务同一 id 时静默改变行为。
+**根据网关 URL 或模型 id 推断严格行为。** 端点归属和兼容性是部署事实。硬编码识别会在 proxy 迁移或通过另一后端服务同一 id 时静默改变行为。
 
 **只修补当前观察到的网关。** 网关侧删除可以修复一套安装，却仍使适配器无法描述另一个严格 Responses 端点。按模型声明让兼容决策留在路由配置中，并可独立测试。
 

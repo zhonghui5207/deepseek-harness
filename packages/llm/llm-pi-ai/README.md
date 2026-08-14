@@ -69,7 +69,7 @@ Configure credentials, the model catalog, and deployment-specific transport sett
               off:
               high: high
               max: ultra
-      # OpenAI Responses gateway whose upstream rejects an output cap.
+      # OpenAI Responses gateway whose target endpoint rejects an output cap.
       strict-responses-gateway:
         apiKeyEnv: STRICT_RESPONSES_API_KEY
         api: openai-responses
@@ -100,7 +100,7 @@ How a thinking level travels — `reasoning_effort` alone, DeepSeek's `thinking:
 
 ### OpenAI Responses output-cap omission
 
-`omitMaxOutputTokens: true` removes `max_output_tokens` after pi-ai builds the final payload for that exact `openai-responses` model. Use it only for a compatible gateway whose upstream rejects the standard field. The model's `maxTokens` still describes output capacity for context calculation, but it stops becoming a Harness request default, and an explicit per-call cap is also omitted; the provider therefore owns output length. Setting the flag on another protocol fails profile resolution instead of silently doing nothing.
+`omitMaxOutputTokens: true` removes `max_output_tokens` after pi-ai builds the final payload for that exact `openai-responses` model. Use it only for a compatible gateway whose target endpoint rejects the standard field. The model's `maxTokens` still describes output capacity for context calculation, but it stops becoming a Harness request default, and an explicit per-call cap is also omitted; the provider therefore owns output length. Setting the flag on another protocol fails profile resolution instead of silently doing nothing.
 
 A model neither the entry nor the installed catalog sizes takes the route's `defaultContextWindow` (262,144) and `defaultMaxTokens` (32,768), so a listing that discloses nothing but ids still yields a serviceable route. Both fallbacks are guesses by construction, which is why they are route fields a deployment whose gateway serves smaller models corrects once rather than constants buried in the adapter; the fallback sizes the model and never becomes a per-request cap.
 
