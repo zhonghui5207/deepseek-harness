@@ -63,6 +63,15 @@ jobs:
         shell: bash
         run: pnpm --filter @deepseek-ai/dsh-desktop exec electron-builder ${{ matrix.target }} --publish never
 
+      - name: Prepare Linux Chromium sandbox
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sandbox=.artifacts/desktop/linux-unpacked/chrome-sandbox
+          sudo chown root:root "$sandbox"
+          sudo chmod 4755 "$sandbox"
+          test "$(stat -c '%U:%G %a' "$sandbox")" = 'root:root 4755'
+
       - name: Smoke packaged Desktop
         shell: bash
         run: |
