@@ -29,6 +29,11 @@ export interface SessionNode {
   runningSubagentCount: number
   /** Finished running while not selected and not yet opened (the green "done" reminder dot). */
   completed: boolean
+  /**
+   * True when this session is in the registry-global pin order. Omitted on
+   * unpinned rows so existing fixtures stay exact.
+   */
+  pinned?: boolean
   updatedAt: number
 }
 
@@ -214,6 +219,7 @@ function groupByWorkspace(
 function sessionNode(
   s: SessionSummary,
   descendants: ReadonlyMap<SessionId, SubagentDescendantSummary>,
+  pinned = false,
 ): SessionNode {
   return {
     id: s.id,
@@ -223,8 +229,34 @@ function sessionNode(
     runningSubagentCount: descendants.get(s.id)?.runningCount ?? 0,
     completed: s.completed === true,
     updatedAt: s.updatedAt,
+    ...(pinned ? { pinned: true } : {}),
     ...(s.pendingInteraction === undefined ? {} : { pendingInteraction: s.pendingInteraction }),
   }
+}
+
+/**
+ * Partition one visible list: pinned ids first in global pin order, then the
+ * remaining rows in their existing view order. Ghost pin ids (not in this
+ * list) are skipped so each group only lifts its own members.
+ * @param rows - already-filtered rows in current view order.
+ * @param pinnedSessionIds - registry-global pin order (newest pin first).
+ * @returns the partitioned rows.
+ */
+export function applyPinnedOrder<T extends { id: SessionId }>(
+  rows: readonly T[],
+  pinnedSessionIds: readonly SessionId[],
+): T[] {
+  if (pinnedSessionIds.length === 0) return [...rows]
+  const byId = new Map(rows.map(row => [row.id, row]))
+  const pinned: T[] = []
+  const seen = new Set<SessionId>()
+  for (const id of pinnedSessionIds) {
+    const row = byId.get(id)
+    if (row === undefined || seen.has(id)) continue
+    pinned.push(row)
+    seen.add(id)
+  }
+  return [...pinned, ...rows.filter(row => !seen.has(row.id))]
 }
 
 /**
@@ -239,6 +271,7 @@ function sessionNode(
  * @param workspaces - real workspaces in stable Host order.
  * @param archivedSessionIds - registry-global archive set.
  * @param view - local expansion arrays.
+ * @param pinnedSessionIds - registry-global pin order (newest pin first).
  * @returns group sections in render order.
  */
 export function deriveGroups(
@@ -246,8 +279,10 @@ export function deriveGroups(
   workspaces: readonly WorkspaceView[],
   archivedSessionIds: readonly SessionId[],
   view: TreeView,
+  pinnedSessionIds: readonly SessionId[] = [],
 ): GroupNode[] {
   const archived = new Set(archivedSessionIds)
+  const pinned = new Set(pinnedSessionIds)
   const expandedGroups = new Set(view.expandedGroups)
   const descendants = indexSubagentDescendants(list.byId)
   const currentGroup = list.current === undefined
@@ -266,7 +301,12 @@ export function deriveGroups(
       sessionCount: g.sessions.length,
       expanded,
       containsCurrent: g.key === currentGroup,
-      sessions: expanded ? g.sessions.map(session => sessionNode(session, descendants)) : [],
+      sessions: expanded
+        ? applyPinnedOrder(
+          g.sessions.map(session => sessionNode(session, descendants, pinned.has(session.id))),
+          pinnedSessionIds,
+        )
+        : [],
     })
   }
   return groups
@@ -279,13 +319,16 @@ export function deriveGroups(
  * (see {@link deriveSearchResults}).
  * @param list - sessions list snapshot.
  * @param archivedSessionIds - registry-global archive set.
+ * @param pinnedSessionIds - registry-global pin order (newest pin first).
  * @returns flat rows in render order.
  */
 export function deriveFlat(
   list: SessionListState,
   archivedSessionIds: readonly SessionId[],
+  pinnedSessionIds: readonly SessionId[] = [],
 ): SessionNode[] {
   const archived = new Set(archivedSessionIds)
+  const pinned = new Set(pinnedSessionIds)
   const descendants = indexSubagentDescendants(list.byId)
   const rows: SessionSummary[] = []
   for (const id of list.ids) {
@@ -294,7 +337,10 @@ export function deriveFlat(
     rows.push(s)
   }
   rows.sort(byRecency)
-  return rows.map(session => sessionNode(session, descendants))
+  return applyPinnedOrder(
+    rows.map(session => sessionNode(session, descendants, pinned.has(session.id))),
+    pinnedSessionIds,
+  )
 }
 
 /** Relative-time bucket of a session row's trailing label. */

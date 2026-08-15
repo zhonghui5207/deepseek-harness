@@ -54,6 +54,7 @@ ui-sidebar 缩为列几何壳：品牌行、折叠状态机、New Session、Sett
 - 壳/区域两事实约定把 workspace 域的后续功能（Delete 确认、跨组移动、Ungrouped 收编）全部收进 ui-workspace 单包；ui-sidebar 不再随 session 列表功能演进。
 - 平铺模式不支持重排，也没有在指定 workspace 中创建 session 的入口（需切回分组视图），是拍板接受的范围收窄。
 - session Delete 的功能接线与扩展 wire 状态枚举，留待后续迭代。
+- 用户粘性置顶是另一条注册表级顺序，并不恢复 Host 账本上的活动置顶；归属见[会话置顶](2026-08-15-session-pin-to-top.md)。
 
 ## 测试
 

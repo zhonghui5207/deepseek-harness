@@ -117,6 +117,13 @@
   margin: 0 6px 0 4px;
 }
 
+.pin {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .flatSessionRowWithoutStatus .title {
   margin-left: 0;
 }

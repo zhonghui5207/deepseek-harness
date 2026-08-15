@@ -22,6 +22,11 @@ export interface WorkspaceListState {
    * build their own transient Set.
    */
   archivedSessionIds: readonly SessionId[]
+  /**
+   * Registry-global pin order: grouping surfaces render these sessions first
+   * inside each list. A plain array (store-engine vocabulary).
+   */
+  pinnedSessionIds: readonly SessionId[]
   state: 'idle' | 'loading' | 'error'
   phase: WorkspaceListPhase
   error: RpcError | null
@@ -66,7 +71,7 @@ export class WorkspaceRuntime implements IWorkspaces {
   constructor(ctx: Context, private readonly api: IApiClient, private readonly sessions: SessionsPort) {
     this.manager = new WorkspaceManager(api)
     this.list = createSnapshotStore<WorkspaceListState>({
-      items: [], archivedSessionIds: [], state: 'idle', phase: 'pending', error: null,
+      items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'pending', error: null,
       baselinesReady: false, recentWorkspaceId: undefined,
     })
     this.manager.subscribe(() => { this.project() })
@@ -293,6 +298,24 @@ export class WorkspaceRuntime implements IWorkspaces {
   }
 
   /**
+   * Pin a session to the front of the registry-global pin order.
+   * @param sessionId - session to pin.
+   */
+  async pinSession(sessionId: SessionId): Promise<void> {
+    const result = await this.manager.pinSession(sessionId)
+    if (!result.ok) throw new Error(`session pin failed: ${result.error.code}: ${result.error.message}`)
+  }
+
+  /**
+   * Remove a session from the registry-global pin order.
+   * @param sessionId - session to unpin.
+   */
+  async unpinSession(sessionId: SessionId): Promise<void> {
+    const result = await this.manager.unpinSession(sessionId)
+    if (!result.ok) throw new Error(`session unpin failed: ${result.error.code}: ${result.error.message}`)
+  }
+
+  /**
    * Move a session within its Workspace's manual order (DOM-insertBefore-like).
    * @param workspaceId - owning workspace.
    * @param sessionId - accounted session to move.
@@ -345,6 +368,7 @@ export class WorkspaceRuntime implements IWorkspaces {
     this.list.set({
       items: workspace.items,
       archivedSessionIds: workspace.archivedSessionIds,
+      pinnedSessionIds: workspace.pinnedSessionIds,
       state: workspace.state,
       phase: workspace.phase,
       error: workspace.error,

@@ -91,4 +91,16 @@ export interface IWorkspaces {
    * @param sessionId - session to archive.
    */
   archiveSession(sessionId: SessionId): Promise<void>
+  /**
+   * Prepend a session to the registry-global pin order (grouping surfaces
+   * render pinned sessions first). An already pinned id is a no-op.
+   * @param sessionId - session to pin.
+   */
+  pinSession(sessionId: SessionId): Promise<void>
+  /**
+   * Remove a session from the registry-global pin order. An unpinned id is a
+   * no-op.
+   * @param sessionId - session to unpin.
+   */
+  unpinSession(sessionId: SessionId): Promise<void>
 }

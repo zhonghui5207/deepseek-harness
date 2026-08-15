@@ -162,7 +162,7 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
     },
     workspace: {
       async list(request) {
-        return { rpcId: request.rpcId, result: { ok: true, value: { items: [], archivedSessionIds: [] } } }
+        return { rpcId: request.rpcId, result: { ok: true, value: { items: [], archivedSessionIds: [], pinnedSessionIds: [] } } }
       },
       async create(request) {
         return {
@@ -190,6 +190,12 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       },
       async archiveSession(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { archivedSessionIds: [request.payload.sessionId] } } }
+      },
+      async pinSession(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { pinnedSessionIds: [request.payload.sessionId] } } }
+      },
+      async unpinSession(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { pinnedSessionIds: [] } } }
       },
     },
     agentPresets: {

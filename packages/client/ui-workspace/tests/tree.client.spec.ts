@@ -194,6 +194,25 @@ describe('deriveGroups', () => {
     expect(groups[0]!.sessionCount).toBe(1)
   })
 
+  it('lifts pinned sessions to the front of each group in global pin order', () => {
+    const older = summary('older', 1)
+    const newer = summary('newer', 9)
+    const middle = summary('middle', 5)
+    const groups = deriveGroups(
+      list(older, newer, middle),
+      [workspace('first', ['older', 'newer', 'middle'])],
+      noArchive,
+      view(['first']),
+      [sid('middle'), sid('older'), sid('ghost')],
+    )
+    expect(groups[0]!.sessions.map(session => session.id)).toEqual([
+      sid('middle'), sid('older'), sid('newer'),
+    ])
+    expect(groups[0]!.sessions[0]?.pinned).toBe(true)
+    expect(groups[0]!.sessions[1]?.pinned).toBe(true)
+    expect(groups[0]!.sessions[2]?.pinned).toBeUndefined()
+  })
+
   it('marks selected Workspace and Ungrouped sessions without relying on an Intent', () => {
     const owned = summary('owned', 1)
     const loose = summary('loose', 2)
@@ -248,6 +267,15 @@ describe('deriveFlat', () => {
     const kept = summary('kept', 1)
     const gone = summary('gone', 2)
     expect(deriveFlat(list(kept, gone), archived('gone')).map(row => row.id)).toEqual([kept.id])
+  })
+
+  it('lifts pinned sessions ahead of recency in flat mode', () => {
+    const older = summary('older', 1)
+    const newer = summary('newer', 9)
+    const rows = deriveFlat(list(older, newer), noArchive, [sid('older')])
+    expect(rows.map(row => row.id)).toEqual([older.id, newer.id])
+    expect(rows[0]?.pinned).toBe(true)
+    expect(rows[1]?.pinned).toBeUndefined()
   })
 })
 

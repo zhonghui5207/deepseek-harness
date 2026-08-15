@@ -206,11 +206,29 @@ insertBefore(id: WorkspaceId, beforeId?: WorkspaceId): Promise<readonly Workspac
 /**
  * Archive one session durably. The session must exist (live or in session
  * persistence); its workspace accounting — or lack of one — is irrelevant.
- * An already archived id resolves without writing.
+ * An already archived id resolves without writing. Archiving a pinned
+ * session also drops it from the pin order in the same write.
  * @param sessionId - The session to archive.
  * @returns resolution after durability.
  */
 archiveSession(sessionId: SessionId): Promise<void>
+
+/**
+ * Pin one session to the front of the registry-global pin order. The
+ * session must exist (live or in session persistence). An already pinned
+ * id resolves without writing.
+ * @param sessionId - The session to pin.
+ * @returns resolution after durability.
+ */
+pinSession(sessionId: SessionId): Promise<void>
+
+/**
+ * Remove one session from the registry-global pin order. An id that is
+ * not pinned resolves without writing; the session need not still exist.
+ * @param sessionId - The session to unpin.
+ * @returns resolution after durability.
+ */
+unpinSession(sessionId: SessionId): Promise<void>
 
 /**
  * Resolve by canonical directory path without creating or mutating a
@@ -224,5 +242,5 @@ async resolveByPath(path: string): Promise<Workspace | undefined>
 
 Types: [SessionId](core.md)
 
-Source: [`packages/workspace/workspace/src/index.ts:92`](../../packages/workspace/workspace/src/index.ts)
+Source: [`packages/workspace/workspace/src/index.ts:93`](../../packages/workspace/workspace/src/index.ts)
 <!-- END GENERATED cordis-surface -->

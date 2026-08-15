@@ -2804,6 +2804,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         return Promise.resolve(ok(request, {
           items: ctx.workspaceRegistry.list().map(workspaceView),
           archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds],
+          pinnedSessionIds: [...ctx.workspaceRegistry.pinnedSessionIds],
         }))
       },
 
@@ -2917,6 +2918,29 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           })
         }
         return ok(request, { archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds] })
+      },
+
+      async pinSession(request) {
+        const { sessionId } = request.payload
+        try {
+          await ctx.workspaceRegistry.pinSession(sessionId)
+        } catch (error: unknown) {
+          // Only the registry's unknown-session rejection is the business
+          // code; storage/durability failures propagate as internal errors.
+          if (!(error instanceof WorkspaceUnknownSessionError)) throw error
+          return err(request, {
+            code: 'session-not-found',
+            message: error.message,
+            details: { sessionId },
+          })
+        }
+        return ok(request, { pinnedSessionIds: [...ctx.workspaceRegistry.pinnedSessionIds] })
+      },
+
+      async unpinSession(request) {
+        const { sessionId } = request.payload
+        await ctx.workspaceRegistry.unpinSession(sessionId)
+        return ok(request, { pinnedSessionIds: [...ctx.workspaceRegistry.pinnedSessionIds] })
       },
     },
 
@@ -3542,6 +3566,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         // stream opens against the current set; workspace.list re-baselines
         // reconnecting clients, so only later changes need frames.
         let archivedSessionIds = ctx.workspaceRegistry.archivedSessionIds
+        let pinnedSessionIds = ctx.workspaceRegistry.pinnedSessionIds
         const disposers = [
           ctx.on('session/created', (session: Session) => {
             queue.push(frame({
@@ -3593,6 +3618,14 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
                 queue.push(frame({
                   type: 'host/archived-sessions-changed',
                   archivedSessionIds: [...state.archivedSessionIds],
+                }))
+              }
+              if (state.pinnedSessionIds.length !== pinnedSessionIds.length
+                || state.pinnedSessionIds.some((id, index) => id !== pinnedSessionIds[index])) {
+                pinnedSessionIds = state.pinnedSessionIds
+                queue.push(frame({
+                  type: 'host/pinned-sessions-changed',
+                  pinnedSessionIds: [...state.pinnedSessionIds],
                 }))
               }
               return

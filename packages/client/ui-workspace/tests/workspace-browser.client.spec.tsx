@@ -38,8 +38,12 @@ const workspace = (id: string, sessionIds: string[], title = id): WorkspaceView 
   workspaceId: wid(id), path: `/projects/${id}`, title,
   sessionIds: sessionIds.map(sid), createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
 })
-const workspaceState = (items: readonly WorkspaceView[], archivedSessionIds: readonly SessionId[] = []): WorkspaceListState => ({
-  items, archivedSessionIds, state: 'idle', phase: 'ready', error: null, baselinesReady: true,
+const workspaceState = (
+  items: readonly WorkspaceView[],
+  archivedSessionIds: readonly SessionId[] = [],
+  pinnedSessionIds: readonly SessionId[] = [],
+): WorkspaceListState => ({
+  items, archivedSessionIds, pinnedSessionIds, state: 'idle', phase: 'ready', error: null, baselinesReady: true,
   recentWorkspaceId: items[0]?.workspaceId,
 })
 function hook<T>(snapshot: T) {
@@ -76,6 +80,8 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     renameWorkspace: vi.fn(async () => {}),
     deleteWorkspace: vi.fn(async () => {}),
     archiveSession: vi.fn(async () => {}),
+    pinSession: vi.fn(async () => {}),
+    unpinSession: vi.fn(async () => {}),
     insertWorkspaceBefore: vi.fn(async () => {}),
     insertSessionBefore: vi.fn(async () => {}),
     createWorkspace: vi.fn(async () => workspace('created', [])),
@@ -351,6 +357,63 @@ describe('WorkspaceBrowser', () => {
       await Promise.resolve()
       await Promise.resolve()
       expect(warn).toHaveBeenCalledWith('session archive rejected:', rejection)
+      expect(screen.getByText('alpha-s')).toBeTruthy()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('pins a session from the row menu and keeps it first after last-updated promotion', async () => {
+    const pinSession = vi.fn(async () => {})
+    const unpinSession = vi.fn(async () => {})
+    const b = mount({
+      useSessions: hook(sessionState([summary('kept-s', 2), summary('gone-s', 1)])),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['kept-s', 'gone-s'])])),
+      pinSession,
+      unpinSession,
+    })
+    fireEvent.click(screen.getByText('alpha'))
+    fireEvent.click(screen.getByRole('button', { name: '会话“gone-s”的操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '置顶会话' }))
+    expect(pinSession).toHaveBeenCalledWith(sid('gone-s'))
+
+    rerender(b, {
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['kept-s', 'gone-s'])], [], [sid('gone-s')])),
+    })
+    expect(screen.getAllByRole('treeitem').slice(1)[0]?.textContent).toContain('gone-s')
+
+    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '最近更新' }))
+    const promoted = sessionState([summary('kept-s', 9), summary('gone-s', 1)])
+    rerender(b, {
+      useSessions: hook(promoted),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['kept-s', 'gone-s'])], [], [sid('gone-s')])),
+    })
+    await waitFor(() => {
+      expect(screen.getAllByRole('treeitem').slice(1)[0]?.textContent).toContain('gone-s')
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '会话“gone-s”的操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '取消置顶' }))
+    expect(unpinSession).toHaveBeenCalledWith(sid('gone-s'))
+  })
+
+  it('logs and keeps the tree when the pin call rejects', async () => {
+    const rejection = new Error('pin exploded')
+    const pinSession = vi.fn(async () => { throw rejection })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      mount({
+        useSessions: hook(sessionState([summary('alpha-s', 1)])),
+        useWorkspaces: hook(workspaceState([workspace('alpha', ['alpha-s'])])),
+        pinSession,
+      })
+      fireEvent.click(screen.getByText('alpha'))
+      fireEvent.click(screen.getByRole('button', { name: '会话“alpha-s”的操作' }))
+      fireEvent.click(screen.getByRole('menuitem', { name: '置顶会话' }))
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(warn).toHaveBeenCalledWith('session pin rejected:', rejection)
       expect(screen.getByText('alpha-s')).toBeTruthy()
     } finally {
       warn.mockRestore()

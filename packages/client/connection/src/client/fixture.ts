@@ -1560,9 +1560,11 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     updatedAt: fixtureEpoch,
   }]
   let nextWorkspace = 1
-  // Registry-global archive set mirroring the host: archived sessions keep
-  // their workspace accounting slot and only grouping surfaces hide them.
+  // Registry-global archive set and pin order mirroring the host: archived
+  // sessions keep their workspace accounting slot and only grouping surfaces
+  // hide them; pinned sessions stay first inside each group until unpinned.
   const archivedSessionIds: SessionId[] = []
+  const pinnedSessionIds: SessionId[] = []
 
   // In-memory browse tree behind the fixture's `browse` picker capability —
   // deterministic content mirroring the design mock so assembled Web tests
@@ -2567,6 +2569,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       list: request => ok(request, {
         items: workspaces.map(w => ({ ...w })),
         archivedSessionIds: [...archivedSessionIds],
+        pinnedSessionIds: [...pinnedSessionIds],
       }),
       create: (request) => {
         const { path } = request.payload
@@ -2692,7 +2695,31 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           archivedSessionIds.push(sessionId)
           emitHost({ type: 'host/archived-sessions-changed', archivedSessionIds: [...archivedSessionIds] })
         }
+        const pinIndex = pinnedSessionIds.indexOf(sessionId)
+        if (pinIndex !== -1) {
+          pinnedSessionIds.splice(pinIndex, 1)
+          emitHost({ type: 'host/pinned-sessions-changed', pinnedSessionIds: [...pinnedSessionIds] })
+        }
         return ok(request, { archivedSessionIds: [...archivedSessionIds] })
+      },
+      pinSession: (request) => {
+        const missing = requireSession(request)
+        if (missing !== undefined) return missing
+        const { sessionId } = request.payload
+        if (!pinnedSessionIds.includes(sessionId)) {
+          pinnedSessionIds.unshift(sessionId)
+          emitHost({ type: 'host/pinned-sessions-changed', pinnedSessionIds: [...pinnedSessionIds] })
+        }
+        return ok(request, { pinnedSessionIds: [...pinnedSessionIds] })
+      },
+      unpinSession: (request) => {
+        const { sessionId } = request.payload
+        const pinIndex = pinnedSessionIds.indexOf(sessionId)
+        if (pinIndex !== -1) {
+          pinnedSessionIds.splice(pinIndex, 1)
+          emitHost({ type: 'host/pinned-sessions-changed', pinnedSessionIds: [...pinnedSessionIds] })
+        }
+        return ok(request, { pinnedSessionIds: [...pinnedSessionIds] })
       },
     },
     agentPresets: {
@@ -3105,6 +3132,8 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'workspace.insertBefore': return this.api.workspace.insertBefore(request)
       case 'workspace.insertSessionBefore': return this.api.workspace.insertSessionBefore(request)
       case 'workspace.archiveSession': return this.api.workspace.archiveSession(request)
+      case 'workspace.pinSession': return this.api.workspace.pinSession(request)
+      case 'workspace.unpinSession': return this.api.workspace.unpinSession(request)
       case 'skill.list': return this.api.skills.list(request)
       case 'agentPreset.list': return this.api.agentPresets.list(request)
       case 'agentPreset.select': return this.api.agentPresets.select(request)

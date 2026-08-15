@@ -5,9 +5,11 @@
 // trip over the real wire (workspace.rename RPC + durable registry), the
 // duplicate-name pre-check, the
 // flat "In one list" view with its persisted group-by preference, the session
-// hover card and row action menu, and the session archive round trip (row
+// hover card and row action menu, the session pin round trip (row menu →
+// workspace.pinSession RPC → durable global order → still pinned after reload),
+// and the session archive round trip (row
 // menu → workspace.archiveSession RPC → durable global set → row hidden
-// across reload). Zero model calls: workspace.create/rename/archiveSession
+// across reload). Zero model calls: workspace.create/rename/pinSession/archiveSession
 // are host RPCs with no model involvement, and the one session row the
 // flat/hover/menu/archive scenarios need comes from a seeded fixture (the
 // seeded-history seed reused verbatim — no new recording).
@@ -547,6 +549,30 @@ describe('web e2e: workspace management (create / rename / flat view / hover aff
     await expect.poll(() => page.getByRole('menuitem', { name: 'Rename' }).count(), { timeout: 5_000 }).toBe(0)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
+
+  it('pins the seeded session from its row menu and keeps the order across reload', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-ws-pin'))
+    const sessionRow = await seededSessionRow()
+    const rowTitle = await sessionRow.locator('[class*="title"]').innerText()
+    await clickHoverAction(sessionRow, `Session actions for ${rowTitle}`)
+    await page.getByRole('menuitem', { name: 'Pin session' }).click()
+    await expect.poll(() => [...scaffold.ctx.workspaceRegistry.pinnedSessionIds], { timeout: 10_000 })
+      .toEqual([SessionId(SEED_ID)])
+    expect(await page.getByText(rowTitle, { exact: true }).count()).toBeGreaterThan(0)
+    const warningStart = tripwire.warnings.length
+    await page.reload({ waitUntil: 'load' })
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    acknowledgeReloadConnectionLoss(tripwire, warningStart)
+    await expect.poll(() => page.getByText('Workspaces', { exact: true }).count(), { timeout: 15_000 }).toBe(1)
+    expect([...scaffold.ctx.workspaceRegistry.pinnedSessionIds]).toEqual([SessionId(SEED_ID)])
+    const pinnedRow = await seededSessionRow()
+    const pinnedTitle = await pinnedRow.locator('[class*="title"]').innerText()
+    await clickHoverAction(pinnedRow, `Session actions for ${pinnedTitle}`)
+    await page.getByRole('menuitem', { name: 'Unpin session' }).click()
+    await expect.poll(() => [...scaffold.ctx.workspaceRegistry.pinnedSessionIds], { timeout: 10_000 })
+      .toEqual([])
+    expect(tripwire.pageErrors).toEqual([])
+  }, 90_000)
 
   it('archives the seeded session from its row menu, hiding it durably across reload', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-ws-archive'))

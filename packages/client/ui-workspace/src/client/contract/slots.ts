@@ -128,6 +128,16 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
    */
   archiveSession: (sessionId: SessionId) => Promise<void>
   /**
+   * Prepend a Session to the registry-global pin order. Grouping and flat
+   * lists render pinned sessions first; an already pinned id is a no-op.
+   */
+  pinSession: (sessionId: SessionId) => Promise<void>
+  /**
+   * Remove a Session from the registry-global pin order. An unpinned id is a
+   * no-op.
+   */
+  unpinSession: (sessionId: SessionId) => Promise<void>
+  /**
    * Reorder a session inside its Workspace account (DOM-insertBefore
    * semantics: omitted anchor appends to the end). The view refreshes from
    * the Host response/changed frame; failures leave the order unchanged.
