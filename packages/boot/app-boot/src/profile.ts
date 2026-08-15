@@ -461,7 +461,7 @@ export function composeEntries(
 export function indexComposedRows(layers: readonly PatchOptions[][]): ReadonlyMap<string, EntryOptions> {
   const rows = new Map<string, EntryOptions>()
   for (const row of composeEntries(layers)) {
-    if (typeof row.id === 'string') rows.set(row.id, row)
+    rows.set(row.id, row)
   }
   return rows
 }

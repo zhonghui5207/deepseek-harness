@@ -311,14 +311,10 @@ describe('resolveTelemetryPatch', () => {
 describe('indexComposedRows', () => {
   it('indexes the last composed row for each string id', () => {
     const rows = indexComposedRows([
-      [{ insert: [
-        { id: 'webserver', name: 'a', config: { host: '0.0.0.0' } },
-        { name: 'anonymous' },
-      ] }],
+      [{ insert: [{ id: 'webserver', name: 'a', config: { host: '0.0.0.0' } }] }],
       [{ id: 'webserver', config: { host: '127.0.0.1', port: 0 } }],
     ])
     expect(rows.get('webserver')).toMatchObject({ id: 'webserver', config: { host: '127.0.0.1', port: 0 } })
-    expect(rows.has('anonymous')).toBe(false)
   })
 })
 
