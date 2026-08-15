@@ -7,17 +7,23 @@
 import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   composeEntries,
   healProfilesModuleFallback,
+  homePatchPath,
+  indexComposedRows,
   initProfile,
   loadProfile,
   PROFILE_PATCH_FILENAME,
+  PROFILE_ROOT_FILENAME,
   PROFILE_TEMPLATES,
   readProfileManifest,
   resolveBundleDir,
   resolveProfileDir,
+  resolveTelemetryPatch,
+  shippedAgentPresetOverlay,
+  TELEMETRY_ROW_ID,
   writeProfileManifest,
 } from '../src/index.ts'
 
@@ -268,5 +274,78 @@ describe('healProfilesModuleFallback', () => {
     healProfilesModuleFallback(anchor, home) // second healer sees the correct link
     const fallback = join(home, 'profiles', 'node_modules')
     expect(lstatSync(join(fallback, 'dsh-app')).isSymbolicLink()).toBe(true)
+  })
+})
+
+describe('homePatchPath', () => {
+  it('resolves the home-level patch against the current Harness home', () => {
+    const home = tmp()
+    vi.stubEnv('DSH_HOME', home)
+    try {
+      expect(homePatchPath()).toBe(join(home, PROFILE_PATCH_FILENAME))
+      expect(PROFILE_ROOT_FILENAME).toBe('cordis.yml')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+})
+
+describe('resolveTelemetryPatch', () => {
+  it('preserves the configured telemetry mode when the hard-disable switch is unset or empty', () => {
+    expect(resolveTelemetryPatch(undefined, true)).toBeUndefined()
+    expect(resolveTelemetryPatch('', true)).toBeUndefined()
+  })
+
+  it('disables on ANY non-empty value, including falsy-looking ones', () => {
+    for (const value of ['1', '0', 'false', 'no']) {
+      expect(resolveTelemetryPatch(value, true)).toEqual({ id: TELEMETRY_ROW_ID, disabled: true })
+    }
+  })
+
+  it('is trivially satisfied by a composition without the telemetry row', () => {
+    expect(resolveTelemetryPatch('1', false)).toBeUndefined()
+    expect(resolveTelemetryPatch(undefined, false)).toBeUndefined()
+  })
+})
+
+describe('indexComposedRows', () => {
+  it('indexes the last composed row for each string id', () => {
+    const rows = indexComposedRows([
+      [{ insert: [
+        { id: 'webserver', name: 'a', config: { host: '0.0.0.0' } },
+        { name: 'anonymous' },
+      ] }],
+      [{ id: 'webserver', config: { host: '127.0.0.1', port: 0 } }],
+    ])
+    expect(rows.get('webserver')).toMatchObject({ id: 'webserver', config: { host: '127.0.0.1', port: 0 } })
+    expect(rows.has('anonymous')).toBe(false)
+  })
+})
+
+describe('shippedAgentPresetOverlay', () => {
+  it('rewrites the system preset root while keeping the rest of the roster config', () => {
+    const rows = indexComposedRows([[{
+      insert: [{
+        id: 'agent-presets',
+        name: 'roster',
+        config: { extra: true, roots: [{ path: '/old', trust: 'system' }] },
+      }],
+    }]])
+    expect(shippedAgentPresetOverlay(rows, '/shipped')).toEqual({
+      id: 'agent-presets',
+      config: { extra: true, roots: [{ path: '/shipped', trust: 'system' }] },
+    })
+  })
+
+  it('returns undefined when the composition has no roster row', () => {
+    expect(shippedAgentPresetOverlay(indexComposedRows([[]]), '/shipped')).toBeUndefined()
+  })
+
+  it('spreads an empty config when the roster row has none', () => {
+    const rows = indexComposedRows([[{ insert: [{ id: 'agent-presets', name: 'roster' }] }]])
+    expect(shippedAgentPresetOverlay(rows, '/shipped')).toEqual({
+      id: 'agent-presets',
+      config: { roots: [{ path: '/shipped', trust: 'system' }] },
+    })
   })
 })

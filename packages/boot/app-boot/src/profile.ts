@@ -10,7 +10,8 @@
  * `"dsh": { "bundle": { "patch": "./cordis.patch.yml" } }`; the tree is
  * composed by applying each bundle's patch list in `dsh.profile.bundles` order over
  * an empty entry list, then the profile's own patches, then any launcher
- * layers (`--patch` files and flag-derived patches).
+ * layers (`--patch` files, the home-level user patch, shipped preset-root
+ * rewrite, and the `DSH_TELEMETRY_DISABLED` overlay).
  *
  * Module resolution is two-anchor by construction: a bundle name resolves
  * first from the dsh installation (the launcher's own package), then from the
@@ -37,6 +38,38 @@ export const PROFILES_DIR = 'profiles'
 
 /** The user patch layer inside a profile directory (hot-reloaded on long-lived surfaces). */
 export const PROFILE_PATCH_FILENAME = 'cordis.patch.yml'
+
+/** Empty-root config filename every profile tree patches over. */
+export const PROFILE_ROOT_FILENAME = 'cordis.yml'
+
+/**
+ * The home-level user patch layer (`$DSH_HOME/cordis.patch.yml`), applied
+ * over every profile's own layer. Resolved per call, not at module load:
+ * `$DSH_HOME` may be set by the test or launcher after import.
+ * @returns the absolute patch-file path.
+ */
+export function homePatchPath(): string {
+  return join(resolveDshHome(), PROFILE_PATCH_FILENAME)
+}
+
+/** The session-telemetry row id the `DSH_TELEMETRY_DISABLED` switch targets. */
+export const TELEMETRY_ROW_ID = 'session-telemetry-otel'
+
+/**
+ * Resolve the telemetry opt-out switch into its boot patch. ANY non-empty
+ * value (including `'0'`/`'false'`) disables: a privacy switch prefers
+ * off-by-mistake over on-by-mistake. A composition without the telemetry row
+ * exports nothing, so the switch is then trivially satisfied and no patch is
+ * generated — custom profiles need not mount telemetry to run with the
+ * switch set.
+ * @param disabledEnv - the raw `DSH_TELEMETRY_DISABLED` value (`undefined` when unset).
+ * @param hasRow - whether the composition carries the telemetry row.
+ * @returns the disable patch, or `undefined` when no hard-disable patch is required.
+ */
+export function resolveTelemetryPatch(disabledEnv: string | undefined, hasRow: boolean): PatchOptions | undefined {
+  if ((disabledEnv ?? '') === '' || !hasRow) return undefined
+  return { id: TELEMETRY_ROW_ID, disabled: true }
+}
 
 /** The bundle half of the `dsh` manifest section: what a bundle package exports. */
 export interface DshBundleManifest {
@@ -417,4 +450,40 @@ export function composeEntries(
     let index = 0
     warn(message.replace(/%C/g, () => JSON.stringify(args[index++])))
   })
+}
+
+/**
+ * Index composed entries by string id after applying `layers` over an empty
+ * root. Duplicate ids keep the last composed row, matching Loader mount order.
+ * @param layers - patch lists in application order.
+ * @returns id → row of the composed tree, for launcher-owned row checks.
+ */
+export function indexComposedRows(layers: readonly PatchOptions[][]): ReadonlyMap<string, EntryOptions> {
+  const rows = new Map<string, EntryOptions>()
+  for (const row of composeEntries(layers)) {
+    if (typeof row.id === 'string') rows.set(row.id, row)
+  }
+  return rows
+}
+
+/**
+ * Overlay that replaces the system preset root while keeping the rest of the
+ * composed `agent-presets` config. Launchers resolve `root` from their own
+ * install layout.
+ * @param rows - composed-row index from {@link indexComposedRows}.
+ * @param root - absolute directory of the launcher's shipped preset compositions.
+ * @returns the overlay, or `undefined` when the composition has no roster row.
+ */
+export function shippedAgentPresetOverlay(
+  rows: ReadonlyMap<string, EntryOptions>,
+  root: string,
+): PatchOptions | undefined {
+  if (!rows.has('agent-presets')) return undefined
+  return {
+    id: 'agent-presets',
+    config: {
+      ...(rows.get('agent-presets')?.config ?? {}) as Record<string, unknown>,
+      roots: [{ path: root, trust: 'system' }],
+    },
+  }
 }

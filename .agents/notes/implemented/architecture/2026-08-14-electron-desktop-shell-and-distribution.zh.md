@@ -20,7 +20,7 @@ Status: implemented
 
 **Electron 生命周期适配共用的有上限关闭控制器。**一个实例持有 Harness 配置树；第二次启动会聚焦已有实例。退出、Windows／Linux 上关闭最后一个窗口、配置树请求退出以及 signal 都汇聚到等待 Cordis dispose 的路径，并受五秒上限约束；重复中断或卡死的 disposer 会升级为立即退出。macOS 在关闭最后一个窗口后保留进程和配置树，并在再次激活时重建窗口。没有终端可见时，原生错误对话框会展示启动与 renderer 加载失败。
 
-**可执行应用 manifest 持有完整 workspace 对等依赖闭包和已安装应用资产。**Desktop 依赖 `@deepseek-ai/dsh`，由它唯一提供安装后的 `config/agent-presets`；启动器把该目录覆盖为系统根，并在打开窗口前验证 `code`、`cordis`、`minimal` 与 `standard`。`verify-runtime-closure` 同时检查 Desktop manifest 与 Python runtime carrier。发布 workflow 随后使用全新的 Harness home 和 Electron user-data 目录启动真正的未封装可执行文件，并分别通过每个系统 preset 创建 session；这样可以发现只检查外壳无法发现的资产或漏包，又不会与正在运行的已安装实例争用单实例锁。Linux workflow 会在该冒烟开始前恢复 Electron 未封装的 `chrome-sandbox` helper 的 root 所有权与 `4755` 模式，以匹配安装后的 helper，而不是关闭 Chromium 沙箱。`asar` 保持关闭，因为 profile fallback 符号链接与 Loader 解析需要真实包目录；在这些机制拥有适配归档的安装表示之前，这是一项明确选择。
+**可执行应用 manifest 持有完整 workspace 对等依赖闭包和已安装应用资产。**Desktop 依赖 `@deepseek-ai/dsh`，由它唯一提供安装后的 `config/agent-presets`；启动器把该目录覆盖为系统根，并在打开窗口前验证 `code`、`cordis`、`minimal` 与 `standard`。共享启动器 overlay 位于 [`dsh-app-boot`](../../../../packages/boot/app-boot/README.md)：Desktop 与 `dsh` 都会应用 `homePatchPath`、`shippedAgentPresetOverlay` 和 `resolveTelemetryPatch`，因此任何非空的 `DSH_TELEMETRY_DISABLED` 都会在 Loader 挂载前禁用遥测配置行。`verify-runtime-closure` 同时检查 Desktop manifest 与 Python runtime carrier。发布 workflow 随后使用全新的 Harness home 和 Electron user-data 目录启动真正的未封装可执行文件，并分别通过每个系统 preset 创建 session；这样可以发现只检查外壳无法发现的资产或漏包，又不会与正在运行的已安装实例争用单实例锁。Linux workflow 会在该冒烟开始前恢复 Electron 未封装的 `chrome-sandbox` helper 的 root 所有权与 `4755` 模式，以匹配安装后的 helper，而不是关闭 Chromium 沙箱。`asar` 保持关闭，因为 profile fallback 符号链接与 Loader 解析需要真实包目录；在这些机制拥有适配归档的安装表示之前，这是一项明确选择。
 
 ## 影响
 

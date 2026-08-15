@@ -1,8 +1,8 @@
 /**
  * Thin profile boot for the desktop shell: resolve the web profile, stack its
  * patch layers (bundle layers, the profile's own `cordis.patch.yml`, the
- * home-level user layer, then a desktop port overlay), and mount the tree in
- * the Electron main process. Mirrors `apps/cli`'s `runProfile` without its
+ * home-level user layer, then desktop overlays), and mount the tree in the
+ * Electron main process. Mirrors `apps/cli`'s `runProfile` without its
  * process-signal ownership and without live user-patch HMR — the desktop shell
  * owns shutdown through `ctx.fiber.dispose()` instead.
  * @module @deepseek-ai/dsh-desktop/boot
@@ -16,23 +16,24 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import {
   boot,
-  composeEntries,
   healProfilesModuleFallback,
+  homePatchPath,
+  indexComposedRows,
   installFailLoud,
   loadLayeredEnv,
   loadOptionalPatches,
   loadProfile,
-  PROFILE_PATCH_FILENAME,
+  PROFILE_ROOT_FILENAME,
+  resolveTelemetryPatch,
+  shippedAgentPresetOverlay,
+  TELEMETRY_ROW_ID,
 } from '@deepseek-ai/dsh-app-boot'
-import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { DSH_LAUNCH_ENVIRONMENT_KEY } from '@deepseek-ai/dsh-launch-environment'
 import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 
 /** Boot-surface name used for diagnostics and the `.env` layering snapshot. */
 const NAME = 'dsh-desktop'
-/** Root config filename inside a profile directory. */
-const PROFILE_ROOT_FILENAME = 'cordis.yml'
 
 /** Empty root entry list every profile tree patches over. */
 const PROFILE_ROOT_CONFIG = '[]\n'
@@ -62,19 +63,55 @@ function shippedPresetRoot(): string {
   return join(dirname(dshPackage), 'config', 'agent-presets')
 }
 
-/** Build the launch-owned root patch while preserving the composed roster config. */
-function shippedPresetOverlay(patches: readonly PatchOptions[]): PatchOptions {
-  const row = composeEntries([[...patches]]).find(entry => entry.id === 'agent-presets')
-  if (row === undefined) {
+/** Launch-owned patch inputs that do not belong in the shared Web profile. */
+export interface DesktopPatchComposition {
+  /** Bundle layers concatenated, below every user layer. */
+  bundlePatches: readonly PatchOptions[]
+  /** The profile's own `cordis.patch.yml` layer. */
+  profilePatches: readonly PatchOptions[]
+  /** The home-level user layer (`$DSH_HOME/cordis.patch.yml`). */
+  homePatches: readonly PatchOptions[]
+  /** Loopback port overlay; zero lets the operating system choose. */
+  port: number
+  /** Absolute directory of the installed DSH system preset compositions. */
+  shippedPresetRoot: string
+  /** Raw `DSH_TELEMETRY_DISABLED` value (`undefined` when unset). */
+  telemetryDisabledEnv: string | undefined
+}
+
+/**
+ * Compose Desktop's launch-owned overlays over the profile layers.
+ *
+ * The webserver loopback overlay is indexed with the profile layers so the
+ * preset and telemetry patches see the same composed rows that mount. Missing
+ * `agent-presets` fails loud: Desktop cannot open a session without the
+ * installed system roster.
+ * @param input - profile layers plus Desktop-owned overlay inputs.
+ * @returns the full patch stack in application order.
+ */
+export function composeDesktopPatches(input: DesktopPatchComposition): PatchOptions[] {
+  const overlays: PatchOptions[] = [
+    { id: 'webserver', config: { host: '127.0.0.1', port: input.port } },
+  ]
+  const rows = indexComposedRows([
+    [...input.bundlePatches],
+    [...input.profilePatches],
+    [...input.homePatches],
+    overlays,
+  ])
+  const presetOverlay = shippedAgentPresetOverlay(rows, input.shippedPresetRoot)
+  if (presetOverlay === undefined) {
     throw new Error('dsh-desktop: web profile has no agent-presets entry')
   }
-  return {
-    id: 'agent-presets',
-    config: {
-      ...(row.config ?? {}) as Record<string, unknown>,
-      roots: [{ path: shippedPresetRoot(), trust: 'system' }],
-    },
-  }
+  overlays.push(presetOverlay)
+  const telemetryPatch = resolveTelemetryPatch(input.telemetryDisabledEnv, rows.has(TELEMETRY_ROW_ID))
+  if (telemetryPatch !== undefined) overlays.push(telemetryPatch)
+  return [
+    ...input.bundlePatches,
+    ...input.profilePatches,
+    ...input.homePatches,
+    ...overlays,
+  ]
 }
 
 /** Reject an incomplete installation before an interaction needs a preset. */
@@ -96,11 +133,6 @@ async function verifyShippedPresets(ctx: Context): Promise<readonly string[]> {
     throw new Error(`dsh-desktop: installed system agent presets are unusable (${failures.join('; ')})`)
   }
   return SHIPPED_AGENT_PRESET_IDS
-}
-
-/** The home-level user patch layer (`$DSH_HOME/cordis.patch.yml`). */
-function homePatchPath(): string {
-  return join(resolveDshHome(), PROFILE_PATCH_FILENAME)
 }
 
 /** Launch-owned inputs that do not belong in the shared Web profile. */
@@ -138,13 +170,14 @@ export async function bootDesktop(options: DesktopBootOptions = {}): Promise<Des
   // The root is always rewritten: the whole composition is patch layers, and
   // the Loader's write-back can bake composed rows into this file otherwise.
   writeFileSync(join(profile.dir, PROFILE_ROOT_FILENAME), PROFILE_ROOT_CONFIG)
-  const bundlePatches = profile.layers.flatMap(layer => layer.patches)
-  const homePatches = loadOptionalPatches(NAME, homePatchPath()) ?? []
-  const overlays: PatchOptions[] = [
-    { id: 'webserver', config: { host: '127.0.0.1', port: options.port ?? 0 } },
-  ]
-  const patches = [...bundlePatches, ...profile.patches, ...homePatches, ...overlays]
-  patches.push(shippedPresetOverlay(patches))
+  const patches = composeDesktopPatches({
+    bundlePatches: profile.layers.flatMap(layer => layer.patches),
+    profilePatches: profile.patches,
+    homePatches: loadOptionalPatches(NAME, homePatchPath()) ?? [],
+    port: options.port ?? 0,
+    shippedPresetRoot: shippedPresetRoot(),
+    telemetryDisabledEnv: process.env.DSH_TELEMETRY_DISABLED,
+  })
   const ctx = await boot(
     NAME,
     join(profile.dir, PROFILE_ROOT_FILENAME),
