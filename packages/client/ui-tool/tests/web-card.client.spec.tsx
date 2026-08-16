@@ -238,7 +238,6 @@ describe('DetailsPanel web Output section', () => {
         useProjection={(() => undefined)}
         useStore={bindSnapshotSelector(chat)}
         actions={chat.actions}
-        closeDetails={vi.fn()}
         t={t}
       />,
     )

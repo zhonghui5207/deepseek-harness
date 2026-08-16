@@ -1,17 +1,16 @@
 // @vitest-environment jsdom
 /** Files tab listing, crumbs, hidden toggle, and file open. */
-import { render, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { fireEvent, render, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import type { PathListing, SessionListState, WorkspaceListState } from '@deepseek-ai/dsh-client-runtime/client'
+import type { PathListing, SessionId, SessionListState, WorkspaceListState } from '@deepseek-ai/dsh-client-runtime/client'
 import { DirectoryBrowseError } from '@deepseek-ai/dsh-client-runtime/client'
-import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
+import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import { FilesPanel } from '../src/client/FilesPanel.tsx'
 import { createFilesStore } from '../src/client/stores.ts'
 import { zh } from '../src/client/locales.ts'
 
-const SID = 's1' as import('@deepseek-ai/dsh-client-runtime/client').SessionId
+const SID = 's1' as SessionId
 
 const listing: PathListing = {
   path: '/proj',
@@ -85,18 +84,16 @@ function mount(overrides: {
 
 describe('FilesPanel', () => {
   it('lists the session cwd and opens a file when the host can', async () => {
-    const user = userEvent.setup()
     const { view, openPath, listEntries } = mount()
     await waitFor(() => { expect(listEntries).toHaveBeenCalledWith('/proj', expect.any(AbortSignal)) })
     expect(view.queryByText('.env')).toBeNull()
-    await user.click(view.getByRole('button', { name: zh['hidden.show'] }))
+    fireEvent.click(view.getByRole('button', { name: zh['hidden.show'] }))
     expect(view.getByText('.env')).toBeTruthy()
-    await user.click(view.getByRole('button', { name: 'README.md' }))
+    fireEvent.click(view.getByRole('button', { name: 'README.md' }))
     expect(openPath).toHaveBeenCalledWith('/proj/README.md')
   })
 
   it('navigates into a directory and walks crumbs', async () => {
-    const user = userEvent.setup()
     const nested: PathListing = {
       ...listing,
       path: '/proj/src',
@@ -106,24 +103,23 @@ describe('FilesPanel', () => {
     const { view, files, listEntries } = mount()
     await waitFor(() => { expect(view.getByText('src')).toBeTruthy() })
     listEntries.mockResolvedValueOnce(nested)
-    await user.click(view.getByRole('button', { name: 'src' }))
+    fireEvent.click(view.getByRole('button', { name: 'src' }))
     expect(files.store.getSnapshot().path).toBe('/proj/src')
     await waitFor(() => { expect(listEntries).toHaveBeenLastCalledWith('/proj/src', expect.any(AbortSignal)) })
   })
 
   it('leaves a file inert when the host cannot open paths', async () => {
-    const user = userEvent.setup()
     const { view, openPath } = mount({ canOpenPath: false })
     await waitFor(() => { expect(view.getByText('README.md')).toBeTruthy() })
-    expect(view.getByRole('button', { name: 'README.md' })).toBeDisabled()
-    await user.click(view.getByRole('button', { name: 'README.md' }))
+    expect((view.getByRole('button', { name: 'README.md' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(view.getByRole('button', { name: 'README.md' }))
     expect(openPath).not.toHaveBeenCalled()
   })
 
   it('shows the Host business message when a listing fails', async () => {
     const { view } = mount({
       listing: Promise.reject(new DirectoryBrowseError({
-        code: 'directory-unreadable', message: 'denied', details: {},
+        code: 'directory-unreadable', message: 'denied', details: { path: '/proj' },
       })),
     })
     await waitFor(() => { expect(view.getByText('denied')).toBeTruthy() })
@@ -172,10 +168,10 @@ describe('FilesPanel', () => {
         fail = reject
       })
       const { view, files, listEntries } = mount({ listing: first })
-      listEntries.mockImplementation(async (path: string) => {
+      listEntries.mockImplementation((async (path: string) => {
         if (path === '/other') return nested
         return await first
-      })
+      }) as typeof listEntries)
       files.actions.setPath('/other')
       await waitFor(() => { expect(view.getByText(zh['list.empty'])).toBeTruthy() })
       settle(ok, fail)

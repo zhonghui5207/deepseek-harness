@@ -1,24 +1,21 @@
 // @vitest-environment jsdom
 /** Inspector tab shell: tab selection and close. */
-import { render } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { fireEvent, render } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import type { SessionListState, WorkspaceListState } from '@deepseek-ai/dsh-client-runtime/client'
-import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
+import type { SessionId, SessionListState, WorkspaceListState } from '@deepseek-ai/dsh-client-runtime/client'
+import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
+import type { SessionProviderComponent } from '@deepseek-ai/dsh-client-ui-slots'
 import { InspectorPanel } from '../src/client/skeleton/InspectorPanel.tsx'
 import { createChatStore } from '../src/client/stores.ts'
 import { zh } from '../src/client/locales.ts'
 
-const SID = 's1' as import('@deepseek-ai/dsh-client-runtime/client').SessionId
+const SID = 's1' as SessionId
+const SessionProviderStub: SessionProviderComponent = ({ children }) => children(SID)
 
-describe('InspectorPanel', () => {
-  it('renders registered tabs, writes the selected id, and closes the column', async () => {
-    const user = userEvent.setup()
-    const chat = createChatStore().create()
-    const closeDetails = vi.fn()
-    const rendered: string[] = []
-    const sessions = createSnapshotStore<SessionListState>({
+function lists() {
+  return {
+    sessions: createSnapshotStore<SessionListState>({
       ids: [SID],
       byId: { [SID]: { id: SID, title: 'S', displayTitle: 'S', cwd: '/p' } as never },
       current: SID,
@@ -26,13 +23,23 @@ describe('InspectorPanel', () => {
       subagentsByParent: {},
       jobsBySession: {},
       currentAddress: undefined,
-    })
-    const workspaces = createSnapshotStore<WorkspaceListState>({
+    }),
+    workspaces: createSnapshotStore<WorkspaceListState>({
       items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
       baselinesReady: true, recentWorkspaceId: undefined,
-    })
+    }),
+  }
+}
+
+describe('InspectorPanel', () => {
+  it('renders registered tabs, writes the selected id, and closes the column', () => {
+    const chat = createChatStore().create()
+    const closeDetails = vi.fn()
+    const rendered: string[] = []
+    const { sessions, workspaces } = lists()
     const view = render(
       <InspectorPanel
+        SessionProvider={SessionProviderStub}
         sessionId={SID}
         useSession={() => { throw new Error('unused') }}
         useSessions={bindSnapshotSelector(sessions)}
@@ -65,33 +72,22 @@ describe('InspectorPanel', () => {
       />,
     )
     expect(view.getByRole('complementary', { name: zh['inspector.tabs'] })).toBeTruthy()
-    expect(view.getByRole('tab', { name: '文件' })).toHaveAttribute('aria-selected', 'true')
+    expect(view.getByRole('tab', { name: '文件' }).getAttribute('aria-selected')).toBe('true')
     expect(rendered.at(-1)).toBe('files')
-    await user.click(view.getByRole('tab', { name: '详情' }))
+    fireEvent.click(view.getByRole('tab', { name: '详情' }))
     expect(chat.store.getSnapshot().detailsTab).toBe('details')
-    await user.click(view.getByRole('button', { name: zh['details.close'] }))
+    fireEvent.click(view.getByRole('button', { name: zh['details.close'] }))
     expect(closeDetails).toHaveBeenCalledTimes(1)
   })
 
   it('falls back to the first tab when the stored id is unknown', () => {
     const chat = createChatStore().create()
     chat.actions.setDetailsTab('ghost')
-    const sessions = createSnapshotStore<SessionListState>({
-      ids: [SID],
-      byId: { [SID]: { id: SID, title: 'S', displayTitle: 'S', cwd: '/p' } as never },
-      current: SID,
-      phase: 'ready',
-      subagentsByParent: {},
-      jobsBySession: {},
-      currentAddress: undefined,
-    })
-    const workspaces = createSnapshotStore<WorkspaceListState>({
-      items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
-      baselinesReady: true, recentWorkspaceId: undefined,
-    })
+    const { sessions, workspaces } = lists()
     const rendered: string[] = []
     render(
       <InspectorPanel
+        SessionProvider={SessionProviderStub}
         sessionId={SID}
         useSession={() => { throw new Error('unused') }}
         useSessions={bindSnapshotSelector(sessions)}

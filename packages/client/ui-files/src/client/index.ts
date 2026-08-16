@@ -3,9 +3,9 @@
  * action that opens the right column on the Files tab, and the Files tab
  * body that lists the session cwd through `host.listEntries`.
  */
+import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
-import type {} from '@deepseek-ai/dsh-client-connection/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
@@ -32,6 +32,7 @@ export const inject = ['sessions', 'slots', 'locale', 'layout', 'workspaces', 'c
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
+  const connection = ctx.get('connection') as ConnectionHandle
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-files: dictionaries')
   const filesStore = createFilesStore()
 
@@ -62,7 +63,7 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
       store: filesStore,
       inject: () => ({
-        isLoopback: ctx.connection.isLoopback,
+        isLoopback: connection.isLoopback,
         listEntries: (path: string, signal?: AbortSignal) => ctx.workspaces.listEntries(path, signal),
         openPath: (path: string) => {
           void ctx.workspaces.openPath(path).catch(() => {
@@ -70,7 +71,7 @@ export function apply(ctx: ClientContext): void {
             // app surfaces its own error dialog when the path is unusable.
           })
         },
-        hooks: { hostDescription: ctx.connection.hostDescription },
+        hooks: { hostDescription: connection.hostDescription },
       }),
     }, FilesPanel),
   )

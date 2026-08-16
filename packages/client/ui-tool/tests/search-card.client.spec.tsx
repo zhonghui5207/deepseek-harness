@@ -408,7 +408,6 @@ describe('DetailsPanel Output section (search)', () => {
         useProjection={(() => undefined)}
         useStore={bindSnapshotSelector(chat)}
         actions={chat.actions}
-        closeDetails={vi.fn()}
         t={t}
       />,
     )
