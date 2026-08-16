@@ -56,29 +56,32 @@ describe.skipIf(MODE === 'record')('web e2e: right inspector Files and Details t
 
   it('opens Files, drills one directory, closes, and switches to Details', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-right-inspector-files'))
-    await page.getByRole('button', { name: 'Files' }).click()
+    const frame = page.locator('[style*="grid-template-columns"]').first()
+    await page.getByRole('button', { name: 'Files', exact: true }).click()
     const inspector = page.getByRole('complementary', { name: 'Inspector' })
-    await inspector.waitFor({ timeout: 10_000 })
-    await expect(inspector.getByRole('tab', { name: 'Files' })).toHaveAttribute('aria-selected', 'true')
-    await expect(inspector.getByRole('button', { name: 'README.md' })).toBeVisible()
-    await expect(inspector.getByRole('button', { name: 'src' })).toBeVisible()
+    await expect.poll(() => frame.getAttribute('data-details-collapsed'), { timeout: 5_000 }).toBeNull()
+    await inspector.waitFor({ state: 'visible', timeout: 10_000 })
+    expect(await inspector.getByRole('tab', { name: 'Files', exact: true }).getAttribute('aria-selected')).toBe('true')
+    await inspector.getByRole('button', { name: 'README.md', exact: true }).waitFor({ state: 'visible' })
+    await inspector.getByRole('button', { name: 'src', exact: true }).waitFor({ state: 'visible' })
 
     const filesSnapshot = await captureStableAria(page, '[aria-label="Inspector"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(FILES_EXPECTED, filesSnapshot, MODE)
 
-    await inspector.getByRole('button', { name: 'src' }).click()
-    await expect(inspector.getByRole('button', { name: 'index.ts' })).toBeVisible()
+    await inspector.getByRole('button', { name: 'src', exact: true }).click()
+    await inspector.getByRole('button', { name: 'index.ts', exact: true }).waitFor({ state: 'visible' })
 
-    await inspector.getByRole('button', { name: 'Close details' }).click()
-    await expect.poll(async () => inspector.isVisible(), { timeout: 5_000 }).toBe(false)
+    await inspector.getByRole('button', { name: 'Close details', exact: true }).click()
+    await expect.poll(() => frame.getAttribute('data-details-collapsed'), { timeout: 5_000 }).toBe('true')
 
-    await page.getByRole('button', { name: 'Files' }).click()
-    await inspector.waitFor({ timeout: 10_000 })
-    await expect(inspector.getByRole('button', { name: 'index.ts' })).toBeVisible()
+    await page.getByRole('button', { name: 'Files', exact: true }).click()
+    await expect.poll(() => frame.getAttribute('data-details-collapsed'), { timeout: 5_000 }).toBeNull()
+    await inspector.waitFor({ state: 'visible', timeout: 10_000 })
+    await inspector.getByRole('button', { name: 'index.ts', exact: true }).waitFor({ state: 'visible' })
 
-    await inspector.getByRole('tab', { name: 'Details' }).click()
-    await expect(inspector.getByRole('tab', { name: 'Details' })).toHaveAttribute('aria-selected', 'true')
-    await expect(inspector.getByText('Click a tool row in the message flow to view its details')).toBeVisible()
+    await inspector.getByRole('tab', { name: 'Details', exact: true }).click()
+    expect(await inspector.getByRole('tab', { name: 'Details', exact: true }).getAttribute('aria-selected')).toBe('true')
+    await inspector.getByText('Click a tool row in the message flow to view its details').waitFor({ state: 'visible' })
 
     const detailsSnapshot = await captureStableAria(page, '[aria-label="Inspector"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(DETAILS_EXPECTED, detailsSnapshot, MODE)
