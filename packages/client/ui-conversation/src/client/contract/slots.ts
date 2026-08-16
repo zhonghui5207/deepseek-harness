@@ -112,6 +112,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       owner: AssistantActionOwnerProps
     }
     /**
+     * One tab of the right inspector. The `details` occupant renders the
+     * active entry through `only: <id>`. Entries supply `id`, `label`, and
+     * `order`; this package's Details tab is `details`, and ui-files
+     * contributes `files`.
+     */
+    'details.tab': { kind: 'list'; scope: 'session'; owner: DetailsTabOwnerProps }
+    /**
      * The body of the details panel for the tool call the user selected —
      * one occupant, so taking it means rendering every tool's output, not just
      * the ones you know. The owner passes a frozen `block` whose two lifecycle
@@ -121,13 +128,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * A per-tool renderer belongs in the keyed `tool.call.toolview` seat
      * instead; this one is the whole panel.
      */
-    /**
-     * One tab of the right inspector. The `details` occupant renders the
-     * active entry through `only: <id>`. Entries supply `id`, `label`, and
-     * `order`; this package's Details tab is `details`, and ui-files
-     * contributes `files`.
-     */
-    'details.tab': { kind: 'list'; scope: 'session'; owner: DetailsTabOwnerProps }
     'conversation.details.tool': { kind: 'single'; scope: 'session'; owner: DetailsToolOwnerProps }
     /**
      * The composer takeover chain: entries are selector-routed replacements
