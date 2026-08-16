@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Files tab listing, crumbs, hidden toggle, and file open. */
-import { fireEvent, render, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { PathListing, SessionId, SessionListState, WorkspaceListState } from '@deepseek-ai/dsh-client-runtime/client'
 import { DirectoryBrowseError } from '@deepseek-ai/dsh-client-runtime/client'
@@ -27,9 +27,18 @@ const listing: PathListing = {
   truncated: false,
 }
 
-function t(key: keyof typeof zh): string {
-  return zh[key]
+function t(key: keyof typeof zh, vars?: Record<string, string>): string {
+  let out: string = zh[key]
+  if (vars !== undefined) {
+    for (const [name, value] of Object.entries(vars)) {
+      out = out.replaceAll(`{${name}}`, value)
+    }
+  }
+  return out
 }
+
+beforeEach(() => { localStorage.clear() })
+afterEach(cleanup)
 
 function mount(overrides: {
   listing?: PathListing | Promise<PathListing>
@@ -106,6 +115,9 @@ describe('FilesPanel', () => {
     fireEvent.click(view.getByRole('button', { name: 'src' }))
     expect(files.store.getSnapshot().path).toBe('/proj/src')
     await waitFor(() => { expect(listEntries).toHaveBeenLastCalledWith('/proj/src', expect.any(AbortSignal)) })
+    await waitFor(() => { expect(view.getByText('index.ts')).toBeTruthy() })
+    fireEvent.click(view.getByRole('button', { name: 'proj' }))
+    expect(files.store.getSnapshot().path).toBe('/proj')
   })
 
   it('leaves a file inert when the host cannot open paths', async () => {
@@ -161,6 +173,7 @@ describe('FilesPanel', () => {
       entries: [],
     }
     const run = async (settle: (ok: (value: PathListing) => void, fail: (error: unknown) => void) => void) => {
+      localStorage.clear()
       let ok: (value: PathListing) => void = () => {}
       let fail: (error: unknown) => void = () => {}
       const first = new Promise<PathListing>((resolve, reject) => {

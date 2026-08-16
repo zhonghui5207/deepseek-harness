@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Inspector tab shell: tab selection and close. */
-import { fireEvent, render } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { SessionId, SessionListState, WorkspaceListState } from '@deepseek-ai/dsh-client-runtime/client'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
@@ -12,6 +12,9 @@ import { zh } from '../src/client/locales.ts'
 
 const SID = 's1' as SessionId
 const SessionProviderStub: SessionProviderComponent = ({ children }) => children(SID)
+
+beforeEach(() => { localStorage.clear() })
+afterEach(cleanup)
 
 function lists() {
   return {

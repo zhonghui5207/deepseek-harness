@@ -7,6 +7,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import InvariantRegistry from '@deepseek-ai/dsh-invariants'
+import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
 import { stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
@@ -21,8 +22,19 @@ function entryIds(ctx: Context, key: 'conversation.session.header.actions' | 'de
 }
 
 /** Boot the browser half over a real slot tree that declares the two lists. */
-async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugin']> }> {
+async function bench(): Promise<{
+  ctx: Context
+  fiber: ReturnType<Context['plugin']>
+  openInspector: ReturnType<typeof vi.fn>
+  openDetails: ReturnType<typeof vi.fn>
+  listEntries: ReturnType<typeof vi.fn>
+  openPath: ReturnType<typeof vi.fn>
+}> {
   const ctx = new Context()
+  const openInspector = vi.fn()
+  const openDetails = vi.fn()
+  const listEntries = vi.fn(async () => ({ path: '/p', home: '/h', crumbs: [], entries: [], truncated: false }))
+  const openPath = vi.fn(async () => {})
   await ctx.plugin(SlotRegistry).await()
   ctx.slots.register({
     name: 'root',
@@ -31,9 +43,9 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
       'details.tab': { kind: 'list', scope: 'session' },
     },
   } as never, () => null)
-  ctx.provide('sessions', { scope: () => ({ get: () => ({ openInspector: vi.fn() }) }) })
-  ctx.provide('layout', { openDetails: vi.fn(), closeDetails: vi.fn() })
-  ctx.provide('workspaces', { listEntries: vi.fn(), openPath: vi.fn() })
+  ctx.provide('sessions', { scope: () => ({ get: () => ({ openInspector }) }) })
+  ctx.provide('layout', { openDetails, closeDetails: vi.fn() })
+  ctx.provide('workspaces', { listEntries, openPath })
   ctx.provide('connection', {
     api: { settings: {} },
     isLoopback: true,
@@ -44,7 +56,7 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
   await ctx.plugin({ inject: localeInject, apply: applyLocale }).await()
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
-  return { ctx, fiber }
+  return { ctx, fiber, openInspector, openDetails, listEntries, openPath }
 }
 
 describe('ui-files browser half', () => {
@@ -73,6 +85,35 @@ describe('ui-files browser half', () => {
 
   it('keeps the English dictionary key-identical to the Chinese source of truth', () => {
     expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort())
+  })
+
+  it('wires the header action and Files tab inject faces to conversation, layout, and workspaces', async () => {
+    const { ctx, openInspector, openDetails, listEntries, openPath } = await bench()
+    const header = ctx.slots.entries('conversation.session.header.actions')
+      .find(entry => entry.options.id === 'files')!
+    const opened = (header.inject as (sessionId: SessionId) => { openFiles: () => void })('s1' as SessionId)
+    opened.openFiles()
+    expect(openInspector).toHaveBeenCalledWith('files')
+    expect(openDetails).toHaveBeenCalledTimes(1)
+
+    const tab = ctx.slots.entries('details.tab').find(entry => entry.options.id === 'files')!
+    expect((tab.options.label as () => string)()).toBe(zh['tab.files'])
+    const face = (tab.inject as () => {
+      isLoopback: boolean
+      listEntries: (path: string, signal?: AbortSignal) => Promise<unknown>
+      openPath: (path: string) => void
+    })()
+    expect(face.isLoopback).toBe(true)
+    const signal = new AbortController().signal
+    await face.listEntries('/p', signal)
+    expect(listEntries).toHaveBeenCalledWith('/p', signal)
+    face.openPath('/p/README.md')
+    await Promise.resolve()
+    expect(openPath).toHaveBeenCalledWith('/p/README.md')
+    openPath.mockRejectedValueOnce(new Error('unusable'))
+    face.openPath('/missing')
+    await Promise.resolve()
+    expect(openPath).toHaveBeenCalledWith('/missing')
   })
 })
 
