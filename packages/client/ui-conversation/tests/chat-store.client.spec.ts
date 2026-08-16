@@ -12,7 +12,9 @@ beforeEach(() => {
 describe('createChatStore', () => {
   it('init shape: empty selection/draft/view', () => {
     const store = createChatStore().create()
-    expect(store.store.getSnapshot()).toEqual({ selection: null, draft: '', view: null, inspect: null })
+    expect(store.store.getSnapshot()).toEqual({
+      selection: null, draft: '', view: null, inspect: null, detailsTab: null,
+    })
   })
 
   it('actions cover the declared write set', () => {
@@ -33,6 +35,9 @@ describe('createChatStore', () => {
     expect(store.store.getSnapshot().inspect).toEqual({ callId: 'c1' })
     store.actions.setInspect(null)
     expect(store.store.getSnapshot().inspect).toBeNull()
+
+    store.actions.setDetailsTab('files')
+    expect(store.store.getSnapshot().detailsTab).toBe('files')
   })
 
   it('persists per scope key and rehydrates a fresh instance', () => {

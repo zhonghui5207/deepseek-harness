@@ -129,6 +129,19 @@ describe('ConversationController', () => {
     await b.runtime.dispose()
   })
 
+  it('openInspector writes a bound tab and flushes a tab recorded before bind', async () => {
+    const b = await bench()
+    const setDetailsTab = vi.fn()
+    b.scoped.openInspector('files')
+    expect(setDetailsTab).not.toHaveBeenCalled()
+    b.root.bindInspector(b.runtime.sessions.behavior('s1').sessionId, { setDetailsTab })
+    expect(setDetailsTab).toHaveBeenCalledWith('files')
+    b.scoped.openInspector('details')
+    expect(setDetailsTab).toHaveBeenCalledWith('details')
+    expect(() => { b.root.openInspector('files') }).toThrow(/requires a session scope/)
+    await b.runtime.dispose()
+  })
+
   it('fails loudly from the root scope, on an unbound session, or without SessionRuntime', async () => {
     const b = await bench()
     await expect(b.root.send('x')).rejects.toThrow(/requires a session scope/)

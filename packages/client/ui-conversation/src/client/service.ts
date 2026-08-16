@@ -56,6 +56,13 @@ export interface IConversation {
    * @returns completion of the page pull.
    */
   loadOlder(): Promise<void>
+  /**
+   * Select a right-inspector tab for the scoped session. Does not open the
+   * column; the caller invokes `ctx.layout.openDetails` when the column
+   * should become visible.
+   * @param tab - `details.tab` entry id (`files`, `details`, …).
+   */
+  openInspector(tab: string): void
 }
 
 /** Create one browser-only draft descriptor; only its id enters input state. */
@@ -98,6 +105,10 @@ export class ConversationController extends Service implements IConversation {
   private readonly imageGenerations = new Map<SessionId, number>()
   private readonly createdImageUrls = new Set<string>()
   private disposed = false
+  /** Chat-store write face bound by the details inject (same instance the panel reads). */
+  private readonly inspectorActions = new Map<SessionId, { setDetailsTab: (tab: string) => void }>()
+  /** Tab written before the details slot bound its store actions. */
+  private readonly pendingInspectorTab = new Map<SessionId, string>()
 
   /**
    * @param ctx - owning root context (the plugin apply context; the service
@@ -285,6 +296,35 @@ export class ConversationController extends Service implements IConversation {
   /** Pull one older history page for the scoped Session. */
   async loadOlder(): Promise<void> {
     await this.scopedSession('loadOlder').loadOlder()
+  }
+
+  /**
+   * Bind the session chat-store write face so {@link openInspector} shares
+   * the slot-cached instance. The details inject calls this when the column
+   * materializes.
+   * @param sessionId - session whose inspector tab this write face owns.
+   * @param actions - baked `setDetailsTab` from the shared chat store.
+   */
+  bindInspector(sessionId: SessionId, actions: { setDetailsTab: (tab: string) => void }): void {
+    this.inspectorActions.set(sessionId, actions)
+    const pending = this.pendingInspectorTab.get(sessionId)
+    if (pending === undefined) return
+    this.pendingInspectorTab.delete(sessionId)
+    actions.setDetailsTab(pending)
+  }
+
+  /**
+   * Select a right-inspector tab for the scoped session.
+   * @param tab - `details.tab` entry id.
+   */
+  openInspector(tab: string): void {
+    const id = this.scopeId('openInspector')
+    const actions = this.inspectorActions.get(id)
+    if (actions === undefined) {
+      this.pendingInspectorTab.set(id, tab)
+      return
+    }
+    actions.setDetailsTab(tab)
   }
 
   /** Resolve the caller scope's session face or throw on root contexts. */

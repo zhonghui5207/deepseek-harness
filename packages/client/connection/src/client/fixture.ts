@@ -1580,6 +1580,11 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       'deepseek-web', 'deepseek-harness', 'deepseek-app', 'deepseek-landing-blog',
     ]],
   ])
+  const directoryFiles = new Map<string, string[]>([
+    [FIXTURE_HOME, ['notes.txt']],
+    [`${FIXTURE_HOME}/Documents/project`, ['README.md']],
+  ])
+  const filesOf = (path: string): string[] => directoryFiles.get(path) ?? []
   const childrenOf = (path: string): string[] | undefined => {
     const known = directoryTree.get(path)
     if (known !== undefined) return known
@@ -2547,6 +2552,29 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           truncated: false,
         })
       },
+      listEntries: (request) => {
+        const target = request.payload.path
+        const children = childrenOf(target)
+        if (children === undefined) {
+          return err(request, { code: 'directory-unreadable', message: `cannot list ${target}: not in the fixture tree`, details: { path: target } })
+        }
+        const files = filesOf(target)
+        const childPath = (name: string): string => (target === '/' ? `/${name}` : `${target}/${name}`)
+        return ok(request, {
+          path: target,
+          home: FIXTURE_HOME,
+          crumbs: crumbsOf(target),
+          entries: [
+            ...[...children].sort((a, b) => a.localeCompare(b)).map(name => ({
+              name, path: childPath(name), kind: 'directory' as const, hidden: name.startsWith('.'),
+            })),
+            ...[...files].sort((a, b) => a.localeCompare(b)).map(name => ({
+              name, path: childPath(name), kind: 'file' as const, hidden: name.startsWith('.'),
+            })),
+          ].sort((a, b) => a.name.localeCompare(b.name)),
+          truncated: false,
+        })
+      },
       createDirectory: (request) => {
         const parent = request.payload.path
         const children = childrenOf(parent)
@@ -3123,6 +3151,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'host.describe': return this.api.host.describe(request)
       case 'host.pickDirectory': return this.api.host.pickDirectory(request, new AbortController().signal)
       case 'host.listDirectory': return this.api.host.listDirectory(request, new AbortController().signal)
+      case 'host.listEntries': return this.api.host.listEntries(request, new AbortController().signal)
       case 'host.createDirectory': return this.api.host.createDirectory(request)
       case 'host.openPath': return this.api.host.openPath(request, new AbortController().signal)
       case 'workspace.list': return this.api.workspace.list(request)

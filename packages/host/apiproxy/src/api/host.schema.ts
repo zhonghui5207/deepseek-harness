@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod'
-import type { DirectoryEntry } from './host.ts'
+import type { DirectoryEntry, PathEntry } from './host.ts'
 import type { RequestPayload, ResponseValue } from './rpc-map.ts'
 import type { Wire } from './rpc.schema.ts'
 
@@ -48,6 +48,29 @@ export const hostListDirectoryValueSchema = z.object({
   entries: z.array(directoryEntrySchema),
   truncated: z.boolean(),
 }) satisfies z.ZodType<Wire<ResponseValue<'host.listDirectory'>>>
+
+/** host.listEntries request payload; path is the directory to list. */
+export const hostListEntriesRequestSchema = z.object({
+  path: z.string().min(1),
+}) satisfies z.ZodType<Wire<RequestPayload<'host.listEntries'>>>
+
+/** Mixed listing row shared by host.listEntries entries. */
+export const pathEntrySchema = z.object({
+  name: z.string(),
+  path: z.string(),
+  kind: z.enum(['file', 'directory', 'other']),
+  hidden: z.boolean(),
+  size: z.number().optional(),
+}) satisfies z.ZodType<Wire<PathEntry>>
+
+/** host.listEntries response value. */
+export const hostListEntriesValueSchema = z.object({
+  path: z.string(),
+  home: z.string(),
+  crumbs: z.array(directoryEntrySchema),
+  entries: z.array(pathEntrySchema),
+  truncated: z.boolean(),
+}) satisfies z.ZodType<Wire<ResponseValue<'host.listEntries'>>>
 
 /** host.createDirectory request payload: name must be one plain path segment. */
 export const hostCreateDirectoryRequestSchema = z.object({

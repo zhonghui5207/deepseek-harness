@@ -574,6 +574,7 @@ describe('workspaces action face', () => {
     const registered = await ws.create({ path: '/tmp/beta' })
     expect(registered.path).toBe('/tmp/beta')
     await expect(ws.pickDirectory()).resolves.toBeNull()
+    await expect(ws.listEntries('/home/test')).resolves.toMatchObject({ path: '/home/test', entries: [] })
     const renamed = await ws.rename('w1' as WorkspaceId, 'Renamed')
     expect(renamed.title).toBe('Renamed')
     await ws.delete('w1' as WorkspaceId)
@@ -590,7 +591,7 @@ describe('workspaces action face', () => {
     await ws.unpinSession('s1' as SessionId)
     expect(ws.list.getSnapshot().pinnedSessionIds).toEqual([])
     expect(ws.calls.map(c => c.method)).toEqual(
-      ['create', 'create', 'pickDirectory', 'rename', 'delete', 'openPath', 'insertBefore', 'insertSessionBefore', 'archiveSession', 'pinSession', 'unpinSession'])
+      ['create', 'create', 'pickDirectory', 'listEntries', 'rename', 'delete', 'openPath', 'insertBefore', 'insertSessionBefore', 'archiveSession', 'pinSession', 'unpinSession'])
 
     ws.stub('create', () => Promise.resolve({ workspaceId: 'ws-x', title: 'X', path: '/x', sessionIds: [] } as never))
     ws.stub('pickDirectory', () => Promise.resolve('/picked'))

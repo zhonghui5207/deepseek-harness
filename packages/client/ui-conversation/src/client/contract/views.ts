@@ -29,4 +29,10 @@ export interface ChatStoreState {
    * persisted snapshots from before this field rehydrate without it.
    */
   inspect: { callId: CallId } | null
+  /**
+   * Active right-inspector tab id (`details.tab` entry id). Null falls back
+   * to the first registered tab. Read with `?? null` — persisted snapshots
+   * from before this field rehydrate without it.
+   */
+  detailsTab: string | null
 }

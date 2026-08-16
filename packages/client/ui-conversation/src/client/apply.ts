@@ -35,6 +35,7 @@ import { queueDockEntry } from './queue/QueueDock.tsx'
 import { ConversationRoot } from './skeleton/ConversationRoot.tsx'
 import { ConversationSession, ConversationSessionHeader } from './skeleton/ConversationSession.tsx'
 import { DetailsPanel } from './skeleton/DetailsPanel.tsx'
+import { InspectorPanel } from './skeleton/InspectorPanel.tsx'
 import { en, NS, zh, type ConversationKey } from './locales.ts'
 import { registerConversationNodes } from './conversation-nodes/register.ts'
 import { registerChatNodeRenderers } from './chat/register-node-renderers.ts'
@@ -389,6 +390,7 @@ export function apply(ctx: Context): void {
       return {
         openDetails: (target) => {
           actions.select(target)
+          actions.setDetailsTab('details')
           layout.openDetails()
         },
         fileMentions: owner => ctx.get('chatFileMentions')?.forClosing(owner),
@@ -441,16 +443,46 @@ export function apply(ctx: Context): void {
   // registration path into the input dock declared above.
   ctx.plugin(queueDockEntry)
 
+  const inspectorTabs = (): ViewTab[] => {
+    const tabs: ViewTab[] = []
+    for (const entry of slots.entries('details.tab')) {
+      /* v8 ignore next -- unreachable: list registration validates id at load. */
+      if (entry.options.id === undefined) continue
+      tabs.push({ id: entry.options.id, label: resolveSlotLabel(entry.options.label) ?? entry.options.id })
+    }
+    return tabs
+  }
+
   slots.register({
     name: 'details',
+    locale: NS,
+    children: {
+      'details.tab': { kind: 'list', scope: 'session' },
+    },
+    store: chatStore,
+    inject: (sessionId: SessionId, actions: BoundActions<typeof chatStore>): DetailsInjected => {
+      concreteConversation(ctx).bindInspector(sessionId, actions)
+      return {
+        closeDetails: () => { layout.closeDetails() },
+        tabs: {
+          list: inspectorTabs,
+          subscribe: fn => slots.subscribe('details.tab', fn),
+          version: () => slots.getVersion('details.tab'),
+        },
+      }
+    },
+  }, InspectorPanel)
+
+  slots.register({
+    name: 'details.tab',
+    id: 'details',
+    order: 10,
+    label: () => t('inspector.details'),
     locale: NS,
     children: {
       'conversation.details.tool': { kind: 'single', scope: 'session' },
     },
     store: chatStore,
-    inject: (): DetailsInjected => ({
-      closeDetails: () => { layout.closeDetails() },
-    }),
   }, DetailsPanel)
 
 }

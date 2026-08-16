@@ -17,6 +17,7 @@ import type { HostFrame, WorkspaceId } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type { RpcRequest, RpcResponse } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { createApiProxy } from '@deepseek-ai/dsh-host-apiproxy'
+import { FsError } from '@deepseek-ai/dsh-fs'
 import { MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 
 let nextRpc = 1
@@ -64,6 +65,7 @@ async function harness(
   extras: {
     openPath?: (path: string, signal: AbortSignal) => Promise<void>
     canOpenPath?: () => boolean
+    listEntriesMaxEntries?: number
   } = {},
 ) {
   const ctx = new Context()
@@ -107,6 +109,7 @@ async function harness(
     cwd: root,
     ...extras.openPath === undefined ? {} : { openPath: extras.openPath },
     ...extras.canOpenPath === undefined ? {} : { canOpenPath: extras.canOpenPath },
+    ...extras.listEntriesMaxEntries === undefined ? {} : { listEntriesMaxEntries: extras.listEntriesMaxEntries },
   })
   return { api, ctx, storageDomain, root }
 }
@@ -225,6 +228,98 @@ describe('host.listDirectory / host.createDirectory', () => {
     expect((await api.host.createDirectory(request({ path: '/x', name: 'y' }))).result).toMatchObject({
       ok: false, error: { code: 'directory-picker-unavailable', details: { capability: 'native' } },
     })
+  })
+})
+
+describe('host.listEntries', () => {
+  function provideListing(
+    ctx: Context,
+    tree: Map<string, { name: string; type: 'file' | 'directory' | 'other'; size?: number }[]>,
+  ): void {
+    ctx.provide('fs', {
+      resolve: async (path: string) => ({ targetKey: path, displayPath: path }),
+      processPath: (target: { displayPath: string }) => target.displayPath,
+      listDir: async (target: { displayPath: string }) => {
+        const rows = tree.get(target.displayPath)
+        if (rows === undefined) throw new FsError(`cannot list ${target.displayPath}`, 'FS_NOT_FOUND')
+        return rows.map(row => ({
+          name: row.name,
+          type: row.type,
+          target: {
+            targetKey: `${target.displayPath}/${row.name}`,
+            displayPath: `${target.displayPath}/${row.name}`,
+          },
+          ...row.size === undefined ? {} : { size: row.size },
+        }))
+      },
+    } as never)
+  }
+
+  it('returns mixed rows, hidden flags, crumbs, and truncation without requiring browse', async () => {
+    const { api, ctx } = await harness()
+    provideListing(ctx, new Map([
+      ['/proj', [
+        { name: '.env', type: 'file', size: 4 },
+        { name: 'README.md', type: 'file', size: 12 },
+        { name: 'src', type: 'directory' },
+      ]],
+    ]))
+    const listed = expectOk(await api.host.listEntries(request({ path: '/proj' }), new AbortController().signal))
+    expect(listed.path).toBe('/proj')
+    expect(listed.crumbs.map(crumb => crumb.path)).toEqual(['/', '/proj'])
+    expect(listed.entries).toEqual([
+      { name: '.env', path: '/proj/.env', kind: 'file', hidden: true, size: 4 },
+      { name: 'README.md', path: '/proj/README.md', kind: 'file', hidden: false, size: 12 },
+      { name: 'src', path: '/proj/src', kind: 'directory', hidden: false },
+    ])
+    expect(listed.truncated).toBe(false)
+  })
+
+  it('cuts the name-sorted tail at the configured bound and maps missing targets to directory-unreadable', async () => {
+    const { api, ctx } = await harness(undefined, undefined, { listEntriesMaxEntries: 2 })
+    const rows = Array.from({ length: 3 }, (_, index) => ({
+      name: `f${String(index)}`, type: 'file' as const, size: 1,
+    }))
+    ctx.provide('fs', {
+      resolve: async (path: string) => ({ targetKey: path, displayPath: path }),
+      processPath: (target: { displayPath: string }) => target.displayPath,
+      listDir: async () => rows.map(row => ({
+        name: row.name,
+        type: row.type,
+        target: { targetKey: `/p/${row.name}`, displayPath: `/p/${row.name}` },
+        size: row.size,
+      })),
+    } as never)
+    const listed = expectOk(await api.host.listEntries(request({ path: '/p' }), new AbortController().signal))
+    expect(listed.entries.map(entry => entry.name)).toEqual(['f0', 'f1'])
+    expect(listed.truncated).toBe(true)
+
+    const missing = await harness()
+    missing.ctx.provide('fs', {
+      resolve: async () => { throw new FsError('gone', 'FS_NOT_FOUND') },
+      processPath: () => '/x',
+      listDir: async () => [],
+    } as never)
+    expect((await missing.api.host.listEntries(request({ path: '/missing' }), new AbortController().signal)).result)
+      .toMatchObject({ ok: false, error: { code: 'directory-unreadable' } })
+  })
+
+  it('reports an aborted listing as cancelled', async () => {
+    const { api, ctx } = await harness()
+    ctx.provide('fs', {
+      resolve: async (_path: string, opts?: { signal?: AbortSignal }) => {
+        await new Promise((_resolve, reject) => {
+          opts?.signal?.addEventListener('abort', () => { reject(new Error('aborted')) }, { once: true })
+        })
+        return { targetKey: '/p', displayPath: '/p' }
+      },
+      processPath: () => '/p',
+      listDir: async () => [],
+    } as never)
+    const abort = new AbortController()
+    const pending = api.host.listEntries(request({ path: '/p' }), abort.signal)
+    abort.abort()
+    expect((await pending).result).toMatchObject({ ok: false, error: { code: 'cancelled' } })
   })
 })
 

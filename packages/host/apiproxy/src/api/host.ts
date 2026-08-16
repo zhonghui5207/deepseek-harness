@@ -32,6 +32,40 @@ export interface DirectoryListing {
   truncated: boolean
 }
 
+/** Kind of one mixed listing row from host.listEntries. */
+export type PathEntryKind = 'file' | 'directory' | 'other'
+
+/** One child of a mixed path listing (file, directory, or other). */
+export interface PathEntry {
+  /** Base name shown in a browser row. */
+  name: string
+  /** Absolute host path — the client never joins path segments itself. */
+  path: string
+  /** Entry kind from the filesystem listing. */
+  kind: PathEntryKind
+  /** Hidden by the host platform's convention (dot-prefixed on POSIX); the client owns whether to show it. */
+  hidden: boolean
+  /** Byte size of a regular file, when the backend reports it. */
+  size?: number
+}
+
+/** host.listEntries response value: one mixed directory level plus its ancestry. */
+export interface PathListing {
+  /** Absolute path of the listed directory. */
+  path: string
+  /** The host account's home directory (breadcrumb "Home" rooting). */
+  home: string
+  /**
+   * Ancestor chain from the filesystem root to the listed directory
+   * inclusive; every crumb is a jump target (crumb `hidden` is always false).
+   */
+  crumbs: DirectoryEntry[]
+  /** Direct children of every kind, name-sorted. */
+  entries: PathEntry[]
+  /** True when the backend cut `entries` at its complete-result bound (the name-sorted tail is absent). */
+  truncated: boolean
+}
+
 /** Host-level unary methods. */
 export interface HostApi {
   /**
@@ -72,6 +106,18 @@ export interface HostApi {
     request: RpcRequest<{ path?: string }>,
     signal: AbortSignal,
   ): Promise<RpcResponse<DirectoryListing>>
+
+  /**
+   * List one directory level with files and directories for the session
+   * Files inspector. Path is required (the Files tab always has a cwd).
+   * Independent of the directory-picker capability; unreadable or missing
+   * targets fail with `directory-unreadable`. The carrier's request signal
+   * follows the caller, stopping the filesystem scan on disconnect or timeout.
+   */
+  listEntries(
+    request: RpcRequest<{ path: string }>,
+    signal: AbortSignal,
+  ): Promise<RpcResponse<PathListing>>
 
   /**
    * Create one child directory under an existing parent (the browser's

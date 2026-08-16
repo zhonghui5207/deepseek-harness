@@ -222,6 +222,7 @@ describe('conversation slot inject API', () => {
     const { instance, injected } = b.chatViewApi(ROOT)
     injected.openDetails({ turnSeq: 2, callId: 'c1' })
     expect(instance.store.getSnapshot().selection).toEqual({ turnSeq: 2, callId: 'c1' })
+    expect(instance.store.getSnapshot().detailsTab).toBe('details')
     expect(b.layoutFake.openDetails).toHaveBeenCalledTimes(1)
     // The chat view shares the conversation entry's store instance: selection
     // writes land where the skeleton and details read.
@@ -336,11 +337,16 @@ describe('conversation slot inject API', () => {
 })
 
 describe('details inject API', () => {
-  it('details injects the one layout callback; selection rides the shared store instead', async () => {
+  it('details injects close plus the inspector tab ledger; selection rides the shared store', async () => {
     const b = await bench()
     const entry = b.entryOf('details')
-    const injected = (entry.inject as unknown as () => DetailsInjected)()
-    expect(Object.keys(injected)).toEqual(['closeDetails'])
+    const instance = b.runtime.storeOf('details', ROOT) as ChatInstance
+    const injected = (entry.inject as unknown as (sessionId: typeof ROOT, actions: ChatActions) => DetailsInjected)(
+      ROOT, instance.actions)
+    expect(Object.keys(injected).sort()).toEqual(['closeDetails', 'tabs'])
+    expect(injected.tabs.list().map(tab => tab.id)).toEqual(['details'])
+    b.runtime.sessions.scope(ROOT)!.get('conversation')!.openInspector('files')
+    expect(instance.store.getSnapshot().detailsTab).toBe('files')
     injected.closeDetails()
     expect(b.layoutFake.closeDetails).toHaveBeenCalledTimes(1)
     // The shared handle: details resolves the SAME instance conversation writes.
