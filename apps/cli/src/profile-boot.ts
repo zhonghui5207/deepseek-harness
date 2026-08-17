@@ -16,46 +16,34 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { FiberState, type Context } from '@deepseek-ai/cordis'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
-import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import {
   boot,
-  composeEntries,
   createProcessShutdown,
   healProfilesModuleFallback,
+  homePatchPath,
+  indexComposedRows,
   installFailLoud,
   loadOptionalPatches,
   loadOverlayPatches,
   loadProfile,
-  PROFILE_PATCH_FILENAME,
+  PROFILE_ROOT_FILENAME,
+  resolveTelemetryPatch,
+  shippedAgentPresetOverlay,
+  TELEMETRY_ROW_ID,
   type ProcessShutdown,
   watchUserPatches,
   type Profile,
 } from '@deepseek-ai/dsh-app-boot'
-import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
+import { DSH_LAUNCH_ENVIRONMENT_KEY, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
+import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
 
 /** Shipped agent-preset root: beside this app's own config, in both source and built layouts. */
 const SHIPPED_PRESET_ROOT = fileURLToPath(new URL('../config/agent-presets/', import.meta.url))
 
-import { DSH_LAUNCH_ENVIRONMENT_KEY, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
-import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
-
-const NAME = 'dsh'
-
-/**
- * The home-level user patch layer (`$DSH_HOME/cordis.patch.yml`), applied
- * over every profile's own layer. Resolved per call, not at module load:
- * `$DSH_HOME` may be set by the test or launcher after import.
- * @returns the absolute patch-file path.
- */
-export function homePatchPath(): string {
-  return join(resolveDshHome(), PROFILE_PATCH_FILENAME)
-}
-
 /** Absolute path of this dsh installation's package.json (both anchors: src/ and lib/ sit one level under apps/cli). */
 export const INSTALL_ANCHOR = fileURLToPath(new URL('../package.json', import.meta.url))
 
-/** The session-telemetry row id the DSH_TELEMETRY_DISABLED switch targets. */
-const TELEMETRY_ROW_ID = 'session-telemetry-otel'
+const NAME = 'dsh'
 
 /** The empty root entry list every profile tree patches over. */
 const PROFILE_ROOT_CONFIG = `# dsh profile root — an empty entry list. The tree is composed as patches:
@@ -63,25 +51,6 @@ const PROFILE_ROOT_CONFIG = `# dsh profile root — an empty entry list. The tre
 # --patch overlays. Edit cordis.patch.yml, not this file.
 []
 `
-
-/** Root config filename inside a profile directory. */
-export const PROFILE_ROOT_FILENAME = 'cordis.yml'
-
-/**
- * Resolve the telemetry opt-out switch into its boot patch. ANY non-empty
- * value (including `'0'`/`'false'`) disables: a privacy switch prefers
- * off-by-mistake over on-by-mistake. A composition without the telemetry row
- * exports nothing, so the switch is then trivially satisfied and no patch is
- * generated — custom profiles need not mount telemetry to run with the
- * switch set.
- * @param disabledEnv - the raw `DSH_TELEMETRY_DISABLED` value (`undefined` when unset).
- * @param hasRow - whether the composition carries the telemetry row.
- * @returns the disable patch, or `undefined` when no hard-disable patch is required.
- */
-export function resolveTelemetryPatch(disabledEnv: string | undefined, hasRow: boolean): PatchOptions | undefined {
-  if ((disabledEnv ?? '') === '' || !hasRow) return undefined
-  return { id: TELEMETRY_ROW_ID, disabled: true }
-}
 
 /**
  * Load a resolved profile for `name`: heal the shared module fallback, then
@@ -103,7 +72,7 @@ export function prepareProfile(name: string, userLayer = true): Profile {
   return profile
 }
 
-/** One profile's patch layers (application order) and the row index of its pre-flag composition. */
+/** One profile's patch layers (application order). */
 interface ComposedProfile {
   profile: Profile
   /** Bundle layers concatenated — the part below the user layers on a live reload. */
@@ -112,11 +81,6 @@ interface ComposedProfile {
   homePatches: PatchOptions[]
   /** Layers above the user layers on a live reload: `--patch` overlays and the telemetry switch. */
   overlays: PatchOptions[]
-  /**
-   * id → row of the composed tree (bundles + user layers + overlays), for the
-   * launcher's own row checks.
-   */
-  rows: ReadonlyMap<string, EntryOptions>
 }
 
 /** The full patch stack of one composed profile, in application order. */
@@ -148,27 +112,17 @@ function composeProfile(
   const homePatches = loadOptionalPatches(NAME, homePatchPath()) ?? []
   const overlays = patchFiles.flatMap(file => loadOverlayPatches(NAME, resolve(file)))
   const bundlePatches = profile.layers.flatMap(layer => layer.patches)
-  const rows = new Map<string, EntryOptions>()
-  for (const row of composeEntries([bundlePatches, profile.patches, homePatches, overlays])) {
-    if (typeof row.id === 'string') rows.set(row.id, row)
-  }
+  const rows = indexComposedRows([bundlePatches, profile.patches, homePatches, overlays])
   const composedOverlays = [...overlays]
   // The SHIPPED root is the part of the roster only this app can resolve: it
   // sits beside this app's own config, in both the source and built layouts.
   // The writable root the roster appends is `dsh-agent-presets`' own, so a
   // launcher that never reaches this patch still finds a person's presets.
-  if (rows.has('agent-presets')) {
-    composedOverlays.push({
-      id: 'agent-presets',
-      config: {
-        ...(rows.get('agent-presets')?.config ?? {}) as Record<string, unknown>,
-        roots: [{ path: SHIPPED_PRESET_ROOT, trust: 'system' }],
-      },
-    })
-  }
+  const presetOverlay = shippedAgentPresetOverlay(rows, SHIPPED_PRESET_ROOT)
+  if (presetOverlay !== undefined) composedOverlays.push(presetOverlay)
   const telemetryPatch = resolveTelemetryPatch(process.env.DSH_TELEMETRY_DISABLED, rows.has(TELEMETRY_ROW_ID))
   if (telemetryPatch !== undefined) composedOverlays.push(telemetryPatch)
-  return { profile, bundlePatches, homePatches, overlays: composedOverlays, rows }
+  return { profile, bundlePatches, homePatches, overlays: composedOverlays }
 }
 
 /** Options for {@link runProfile}. */
