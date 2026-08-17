@@ -4,7 +4,7 @@
 
 DeepSeek Harness Web 表层的可安装 Electron 壳。Electron 主进程在进程内启动与 `dsh web` 相同的 `web` profile，通过 overlay 把 `webserver` 绑定到 `127.0.0.1` 并让操作系统分配端口，再用一个沙箱窗口加载实际 URL。renderer 使用 `sandbox: true` 与上下文隔离，不启用 Node 集成，也没有 preload 桥；文件系统、shell、session、设置、凭据和模型提供方均留在主进程。导航被限制在应用同源范围，普通 HTTP(S) 链接交给操作系统浏览器，非 Web scheme 则被拒绝。
 
-Desktop 与 CLI 使用同一个 Harness home：优先取 `$DSH_HOME`，否则使用 `~/.dsh`。因此 profile、`settings.yaml`、`.credentials.yaml`、session 和模型路由无需 Desktop 专用迁移即可共用。在 Windows 与 Linux 上关闭最后一个窗口会退出；macOS 会保留应用，并在再次激活时重建窗口。单实例锁会聚焦已有窗口，所有退出路径都会先给 Cordis 配置树一个有上限的优雅关闭窗口，再退出 Electron。
+Desktop 与 CLI 使用同一个 Harness home：优先取 `$DSH_HOME`，否则使用 `~/.dsh`。因此 profile、`settings.yaml`、`.credentials.yaml`、session 和模型路由无需 Desktop 专用迁移即可共用。任何非空的 `DSH_TELEMETRY_DISABLED` 都会在 Desktop 启动时禁用共享遥测配置行，行为与 `dsh` 一致。在 Windows 与 Linux 上关闭最后一个窗口会退出；macOS 会保留应用，并在再次激活时重建窗口。单实例锁会聚焦已有窗口，所有退出路径都会先给 Cordis 配置树一个有上限的优雅关闭窗口，再退出 Electron。
 
 主进程会在启动后以及用户选择**帮助 → 检查更新…**时访问仓库中固定的 GitHub Latest Release endpoint。应用使用 SemVer 比较有效的 `desktop-v<version>` tag 与已安装版本。已是最新版本或有上限的请求失败时，启动检查不会打扰用户；手动检查则会报告这两种结果。发现较新版本后，应用显示原生提示；点击**下载更新**会把固定发布页面交给操作系统浏览器。renderer 不会获得更新 API 或额外权限。
 

@@ -30,7 +30,7 @@ Status: implemented
 
 **默认不挂载，部署方自行添加配置行。** 不采用：挂载的 `DISABLED` 模式会保留本地反馈警告，并为所有 profile 提供同一个 patch 目标，同时不授权任何上传。
 
-**开关做成 config 字段而非 env patch。** 不可行：cordis 行没有 config 层的 disable 语义，且 `exporter.url` 校验在插件构造期 fail-loud，开关必须在 Loader 之前生效——AppCLIEntry patch 层是唯一落点。
+**开关做成 config 字段而非 env patch。** 不可行：cordis 行没有 config 层的 disable 语义，且 `exporter.url` 校验在插件构造期 fail-loud，开关必须在 Loader 之前生效——[`dsh-app-boot`](../architecture/2026-08-15-shared-launcher-profile-overlays.md) 中由 `dsh` 与 Desktop 应用的共享启动器 overlay 是唯一落点。
 
 **退出时 `Promise.race` 兜底超时。** 最初暂缓，是因为 SDK 参数看似已经将后端排空耗时限制在约 1.5-3s（通常 <100ms），实测 SIGINT 到退出耗时 110ms-1.1s。后来在 Linux 沙箱中复现并证明，`BatchLogRecordProcessor.shutdown()` 可能在 `exporter.forceFlush()` 中永久等待，无法进入受 `exportTimeoutMillis` 限制的完成 Promise。因此，[CLI 关闭修复](../bug-fix/2026-08-03-cli-signal-shutdown-escalation.md) 既为这一特定缺口增加 3 秒后端上限，也为整棵插件树增加 5 秒进程级上限和重复信号退出途径。
 

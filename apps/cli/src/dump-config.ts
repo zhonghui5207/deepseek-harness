@@ -9,12 +9,14 @@
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import {
+  homePatchPath,
   loadOptionalPatches,
   loadOverlayPatches,
+  PROFILE_ROOT_FILENAME,
   renderConfigDump,
   type ConfigDumpLayer,
 } from '@deepseek-ai/dsh-app-boot'
-import { homePatchPath, prepareProfile, PROFILE_ROOT_FILENAME } from './profile-boot.ts'
+import { prepareProfile } from './profile-boot.ts'
 
 const NAME = 'dsh'
 
