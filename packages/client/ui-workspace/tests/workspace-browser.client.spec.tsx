@@ -16,6 +16,23 @@ import { zh } from '../src/client/locales.ts'
 afterEach(cleanup)
 beforeEach(() => { localStorage.clear(); createWorkspaceViewStore().create().actions.setOrderBy('manual') })
 
+describe('workspace view persist', () => {
+  it('defaults a missing pin-section fold from an older v5 snapshot', () => {
+    localStorage.setItem('dsh.workspace.view.v5', JSON.stringify({
+      groupBy: 'flat',
+      orderBy: 'manual',
+      groupExpansion: {},
+      sessionOrderByAccount: {},
+      sessionUpdatedAtByAccount: {},
+    }))
+    expect(createWorkspaceViewStore().create().getSnapshot()).toMatchObject({
+      groupBy: 'flat',
+      orderBy: 'manual',
+      pinSectionExpanded: true,
+    })
+  })
+})
+
 // The seat's key domain is workspace ∪ common; the stub mirrors the real
 // lookup chain (namespace, then common vocabulary, then the key).
 const t: WorkspaceBrowserProps['t'] = makeTranslate(zh, commonZh)
@@ -363,7 +380,7 @@ describe('WorkspaceBrowser', () => {
     }
   })
 
-  it('pins a session from the row menu and keeps it first after last-updated promotion', async () => {
+  it('pins a session into the sidebar pin section above workspaces', async () => {
     const pinSession = vi.fn(async () => {})
     const unpinSession = vi.fn(async () => {})
     const b = mount({
@@ -380,22 +397,96 @@ describe('WorkspaceBrowser', () => {
     rerender(b, {
       useWorkspaces: hook(workspaceState([workspace('alpha', ['kept-s', 'gone-s'])], [], [sid('gone-s')])),
     })
-    expect(screen.getAllByRole('treeitem').slice(1)[0]?.textContent).toContain('gone-s')
+    expect(screen.getByRole('group', { name: '置顶' })).toBeTruthy()
+    const items = screen.getAllByRole('treeitem')
+    expect(items[0]?.textContent).toBe('置顶')
+    expect(items[1]?.textContent).toContain('gone-s')
+    expect(screen.getByText('工作区')).toBeTruthy()
+    expect(screen.getAllByText('gone-s')).toHaveLength(1)
+    expect(screen.getByText('kept-s')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '最近更新' }))
-    const promoted = sessionState([summary('kept-s', 9), summary('gone-s', 1)])
-    rerender(b, {
-      useSessions: hook(promoted),
-      useWorkspaces: hook(workspaceState([workspace('alpha', ['kept-s', 'gone-s'])], [], [sid('gone-s')])),
-    })
-    await waitFor(() => {
-      expect(screen.getAllByRole('treeitem').slice(1)[0]?.textContent).toContain('gone-s')
-    })
+    fireEvent.click(screen.getByRole('treeitem', { name: '置顶' }))
+    expect(b.store.getSnapshot().pinSectionExpanded).toBe(false)
+    expect(screen.queryByRole('button', { name: '会话“gone-s”的操作' })).toBeNull()
+    fireEvent.click(screen.getByRole('treeitem', { name: '置顶' }))
+    expect(b.store.getSnapshot().pinSectionExpanded).toBe(true)
 
     fireEvent.click(screen.getByRole('button', { name: '会话“gone-s”的操作' }))
     fireEvent.click(screen.getByRole('menuitem', { name: '取消置顶' }))
     expect(unpinSession).toHaveBeenCalledWith(sid('gone-s'))
+  })
+
+  it('does not auto-expand a workspace just because its current session is pinned', () => {
+    const b = mount({
+      useSessions: hook(sessionState([summary('kept-s', 2), summary('gone-s', 1)], { current: sid('gone-s') })),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['kept-s', 'gone-s'])], [], [sid('gone-s')])),
+    })
+    expect(screen.getByRole('group', { name: '置顶' })).toBeTruthy()
+    expect(screen.getByText('gone-s')).toBeTruthy()
+    expect(screen.queryByText('kept-s')).toBeNull()
+    expect(b.store.getSnapshot().groupExpansion).toEqual({})
+  })
+
+  it('keeps the flat-list account unpartitioned so unpin restores view order', async () => {
+    const pinSession = vi.fn(async () => {})
+    const unpinSession = vi.fn(async () => {})
+    const sessions = sessionState([summary('one', 3), summary('two', 2), summary('three', 1)])
+    const workspaces = [
+      workspace('alpha', ['one']),
+      workspace('beta', ['two', 'three']),
+    ]
+    const b = mount({
+      useSessions: hook(sessions),
+      useWorkspaces: hook(workspaceState(workspaces)),
+      pinSession,
+      unpinSession,
+    })
+    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '单列表' }))
+    await waitFor(() => {
+      expect(b.store.getSnapshot().sessionOrderByAccount[FLAT_SESSION_ORDER_KEY])
+        .toEqual(['one', 'two', 'three'])
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '会话“three”的操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '置顶会话' }))
+    expect(pinSession).toHaveBeenCalledWith(sid('three'))
+    rerender(b, { useWorkspaces: hook(workspaceState(workspaces, [], [sid('three')])) })
+    expect(screen.getAllByRole('treeitem').map(row => row.textContent)).toEqual([
+      '置顶',
+      expect.stringContaining('three'),
+      expect.stringContaining('one'),
+      expect.stringContaining('two'),
+    ])
+
+    const one = screen.getByText('one').closest('[role="treeitem"]') as HTMLElement
+    const two = screen.getByText('two').closest('[role="treeitem"]') as HTMLElement
+    two.getBoundingClientRect = () => ({
+      top: 150, bottom: 184, left: 0, right: 200, width: 200, height: 34,
+      x: 0, y: 150, toJSON: () => ({}),
+    })
+    fireEvent.dragStart(one, { dataTransfer: dragData() })
+    fireDrag(two, 'drop', 180)
+    expect(b.store.getSnapshot().sessionOrderByAccount[FLAT_SESSION_ORDER_KEY])
+      .toEqual(['two', 'three', 'one'])
+    expect(screen.getAllByRole('treeitem').map(row => row.textContent)).toEqual([
+      '置顶',
+      expect.stringContaining('three'),
+      expect.stringContaining('two'),
+      expect.stringContaining('one'),
+    ])
+
+    fireEvent.click(screen.getByRole('button', { name: '会话“three”的操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '取消置顶' }))
+    expect(unpinSession).toHaveBeenCalledWith(sid('three'))
+    rerender(b, { useWorkspaces: hook(workspaceState(workspaces)) })
+    expect(b.store.getSnapshot().sessionOrderByAccount[FLAT_SESSION_ORDER_KEY])
+      .toEqual(['two', 'three', 'one'])
+    expect(screen.getAllByRole('treeitem').map(row => row.textContent)).toEqual([
+      expect.stringContaining('two'),
+      expect.stringContaining('three'),
+      expect.stringContaining('one'),
+    ])
   })
 
   it('logs and keeps the tree when the pin call rejects', async () => {

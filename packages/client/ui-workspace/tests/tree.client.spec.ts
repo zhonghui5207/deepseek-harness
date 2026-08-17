@@ -3,7 +3,7 @@ import type {
   SessionId, SessionListState, SessionSummary, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import {
-  deriveFlat, deriveGroups, deriveSearchResults, workspaceLabel, relativeTime,
+  deriveFlat, deriveGroups, derivePinned, deriveSearchResults, workspaceLabel, relativeTime,
   UNGROUPED_KEY, UNGROUPED_LABEL,
 } from '../src/client/tree.ts'
 import { createWorkspaceViewStore } from '../src/client/stores.ts'
@@ -194,7 +194,7 @@ describe('deriveGroups', () => {
     expect(groups[0]!.sessionCount).toBe(1)
   })
 
-  it('lifts pinned sessions to the front of each group in global pin order', () => {
+  it('omits pinned sessions from each group so they only appear in the pin section', () => {
     const older = summary('older', 1)
     const newer = summary('newer', 9)
     const middle = summary('middle', 5)
@@ -205,12 +205,23 @@ describe('deriveGroups', () => {
       view(['first']),
       [sid('middle'), sid('older'), sid('ghost')],
     )
-    expect(groups[0]!.sessions.map(session => session.id)).toEqual([
-      sid('middle'), sid('older'), sid('newer'),
-    ])
-    expect(groups[0]!.sessions[0]?.pinned).toBe(true)
-    expect(groups[0]!.sessions[1]?.pinned).toBe(true)
-    expect(groups[0]!.sessions[2]?.pinned).toBeUndefined()
+    expect(groups[0]!.sessions.map(session => session.id)).toEqual([sid('newer')])
+    expect(groups[0]!.sessionCount).toBe(1)
+    expect(groups[0]!.sessions[0]?.pinned).toBeUndefined()
+  })
+
+  it('hides Ungrouped when every loose session is pinned', () => {
+    const loose = summary('loose', 2)
+    const owned = summary('owned', 1)
+    const groups = deriveGroups(
+      list(owned, loose),
+      [workspace('first', ['owned'])],
+      noArchive,
+      view(['first', UNGROUPED_KEY]),
+      [sid('loose')],
+    )
+    expect(groups.map(group => group.key)).toEqual(['first'])
+    expect(groups[0]!.sessions.map(session => session.id)).toEqual([owned.id])
   })
 
   it('marks selected Workspace and Ungrouped sessions without relying on an Intent', () => {
@@ -269,13 +280,38 @@ describe('deriveFlat', () => {
     expect(deriveFlat(list(kept, gone), archived('gone')).map(row => row.id)).toEqual([kept.id])
   })
 
-  it('lifts pinned sessions ahead of recency in flat mode', () => {
+  it('keeps pinned sessions in recency so the browser can hide them for display', () => {
     const older = summary('older', 1)
     const newer = summary('newer', 9)
-    const rows = deriveFlat(list(older, newer), noArchive, [sid('older')])
+    const rows = deriveFlat(list(older, newer), noArchive)
+    expect(rows.map(row => row.id)).toEqual([newer.id, older.id])
+    expect(rows.every(row => row.pinned === undefined)).toBe(true)
+  })
+})
+
+describe('derivePinned', () => {
+  it('returns visible pinned sessions in Host pin order and skips ghosts', () => {
+    const older = summary('older', 1)
+    const newer = summary('newer', 9)
+    const rows = derivePinned(
+      list(older, newer),
+      noArchive,
+      [sid('older'), sid('ghost'), sid('older'), sid('newer')],
+    )
     expect(rows.map(row => row.id)).toEqual([older.id, newer.id])
-    expect(rows[0]?.pinned).toBe(true)
-    expect(rows[1]?.pinned).toBeUndefined()
+    expect(rows.every(row => row.pinned === true)).toBe(true)
+  })
+
+  it('hides the pin section when the Host order is empty', () => {
+    expect(derivePinned(list(summary('kept', 1)), noArchive, [])).toEqual([])
+  })
+
+  it('omits archived and stale-blank pins', () => {
+    const kept = summary('kept', 2)
+    const gone = summary('gone', 3)
+    const blank = { ...summary('blank', 1), blank: true }
+    const rows = derivePinned(list(kept, gone, blank), archived('gone'), [sid('gone'), sid('blank'), sid('kept')])
+    expect(rows.map(row => row.id)).toEqual([kept.id])
   })
 })
 
@@ -435,7 +471,10 @@ describe('createWorkspaceViewStore', () => {
       groupExpansion: { alpha: true },
       sessionOrderByAccount: { alpha: ['one', 'two'] },
       sessionUpdatedAtByAccount: { alpha: { one: 1, two: 2 } },
+      pinSectionExpanded: true,
     })
+    store.actions.setPinSectionExpanded(false)
+    expect(store.getSnapshot().pinSectionExpanded).toBe(false)
   })
 
   it('removes view state outside the retained Workspace key set', () => {
