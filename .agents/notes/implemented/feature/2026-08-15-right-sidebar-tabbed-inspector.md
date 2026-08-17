@@ -29,7 +29,7 @@ The `details` occupant is a thin tab shell (`InspectorPanel`). Child contributio
 
 Later tabs register the same way. Center Chat / Trajectory tabs stay on the conversation header; the two tab rings do not share ids or copy.
 
-The active tab id lives in the conversation chat store (`detailsTab`, persist key `dsh.conversation.chat`). `ConversationController.openInspector(tab)` writes that id through the slot-cached store instance `bindInspector` stashes; a tab written before bind is flushed when the details inject runs. `defineStore.create()` does not dedupe, so `ui-files` must not import or recreate the chat store.
+The active tab id lives in the conversation chat store (`detailsTab`, persist key `dsh.conversation.chat`). `createChatStore().create()` backfills a missing `detailsTab` to `null` after rehydrate so snapshots from before this field stay typed. `ConversationController.openInspector(tab)` writes that id through the slot-cached store instance `bindInspector` stashes; a tab written before bind is flushed when the details inject runs. `defineStore.create()` does not dedupe, so `ui-files` must not import or recreate the chat store.
 
 ### Files tab
 
@@ -43,7 +43,7 @@ The Files path and hidden-entry preference live in a package-owned store (`dsh.f
 
 `host.listDirectory` stays folder-only for workspace adoption.
 
-`host.listEntries({ path })` is a Host Consumer over `ctx.fs.listDir` (`FsDirEntry` already carries `file` | `directory` | `other`). Path is required. The reply carries crumbs, mixed rows (`kind` + name + absolute path + optional size), hidden flag, and truncation. The client never joins path segments. Unreadable or missing targets fail with `directory-unreadable`. The method does not require the browse directory-picker capability. Missing `ctx.fs` fails as `internal`. Crumbs may walk below `cwd` and, in this shipment, also above it (the browse dialog already does).
+`host.listEntries({ path })` is a Host Consumer over `ctx.fs.listDir` (`FsDirEntry` already carries `file` | `directory` | `other`). Path is required and must be fully qualified (POSIX-absolute, or on Windows a drive-qualified or complete UNC form); relative and rooted drive-less Windows forms fail with `directory-unreadable` instead of rebasing under the host process. The reply carries crumbs, mixed rows (`kind` + name + absolute path + optional size), hidden flag, and truncation. The client never joins path segments. Unreadable or missing targets fail with `directory-unreadable`. The method does not require the browse directory-picker capability. Missing `ctx.fs` fails as `internal`. Crumbs may walk below `cwd` and, in this shipment, also above it (the browse dialog already does).
 
 ### Packages
 

@@ -17,6 +17,7 @@ import type { HostFrame, WorkspaceId } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type { RpcRequest, RpcResponse } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { createApiProxy } from '@deepseek-ai/dsh-host-apiproxy'
+import { fullyQualified } from '../src/api-proxy.ts'
 import { FsError } from '@deepseek-ai/dsh-fs'
 import { MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 
@@ -320,6 +321,37 @@ describe('host.listEntries', () => {
     const pending = api.host.listEntries(request({ path: '/p' }), abort.signal)
     abort.abort()
     expect((await pending).result).toMatchObject({ ok: false, error: { code: 'cancelled' } })
+  })
+
+  it('accepts POSIX-absolute and Windows drive/UNC forms and rejects the rest', () => {
+    expect(fullyQualified('/home/x', 'linux')).toBe(true)
+    expect(fullyQualified('x/y', 'darwin')).toBe(false)
+    expect(fullyQualified('C:\\projects', 'win32')).toBe(true)
+    expect(fullyQualified('C:/projects', 'win32')).toBe(true)
+    expect(fullyQualified('\\\\server\\share', 'win32')).toBe(true)
+    expect(fullyQualified('//server/share/deep', 'win32')).toBe(true)
+    expect(fullyQualified('\\foo', 'win32')).toBe(false)
+    expect(fullyQualified('/foo', 'win32')).toBe(false)
+    expect(fullyQualified('C:relative', 'win32')).toBe(false)
+    expect(fullyQualified('\\\\', 'win32')).toBe(false)
+    expect(fullyQualified('\\\\server', 'win32')).toBe(false)
+    expect(fullyQualified('\\\\server\\', 'win32')).toBe(false)
+  })
+
+  it('rejects a path that is not fully qualified before touching the filesystem', async () => {
+    const resolve = vi.fn()
+    const { api, ctx } = await harness()
+    ctx.provide('fs', {
+      resolve,
+      processPath: () => '/x',
+      listDir: async () => [],
+    } as never)
+    expect((await api.host.listEntries(request({ path: 'relative/dir' }), new AbortController().signal)).result)
+      .toMatchObject({
+        ok: false,
+        error: { code: 'directory-unreadable', details: { path: 'relative/dir' } },
+      })
+    expect(resolve).not.toHaveBeenCalled()
   })
 })
 

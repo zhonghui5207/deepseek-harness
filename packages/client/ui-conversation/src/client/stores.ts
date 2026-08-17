@@ -11,7 +11,7 @@ type ChatActions = {
   setDraft: (draft: ChatStoreState, text: string) => void
   setView: (draft: ChatStoreState, view: string) => void
   setInspect: (draft: ChatStoreState, target: { callId: CallId } | null) => void
-  setDetailsTab: (draft: ChatStoreState, tab: string) => void
+  setDetailsTab: (draft: ChatStoreState, tab: string | null) => void
 }
 
 /**
@@ -19,7 +19,7 @@ type ChatActions = {
  * @returns the store handle.
  */
 export function createChatStore(): EngineStoreHandle<ChatStoreState, ChatActions> {
-  return defineStore({
+  const handle = defineStore({
     // Anchored to the contract shape: consumers read the store through
     // PropsStore<ChatStore>'s SnapshotSelectorHook<ChatStoreState>, so init
     // and the contract cannot drift.
@@ -30,7 +30,17 @@ export function createChatStore(): EngineStoreHandle<ChatStoreState, ChatActions
       setDraft: (d, text: string) => { d.draft = text },
       setView: (d, view: string) => { d.view = view },
       setInspect: (d, target: { callId: CallId } | null) => { d.inspect = target },
-      setDetailsTab: (d, tab: string) => { d.detailsTab = tab },
+      setDetailsTab: (d, tab: string | null) => { d.detailsTab = tab },
     },
   })
+  return {
+    ...handle,
+    create(scopeKey?: string) {
+      const instance = handle.create(scopeKey)
+      if (!Object.hasOwn(instance.getSnapshot(), 'detailsTab')) {
+        instance.actions.setDetailsTab(null)
+      }
+      return instance
+    },
+  }
 }

@@ -29,7 +29,7 @@ Web client 已经是三栏：左侧会话导航、中间对话、右侧 `details
 
 后续 Tab 用同一注册方式。中间栏的 Chat／Trajectory Tab 留在会话页头；两套 Tab 不共用 id 或文案。
 
-当前 Tab id 放在会话 chat store（`detailsTab`，持久化键 `dsh.conversation.chat`）。`ConversationController.openInspector(tab)` 通过 `bindInspector` 暂存的 slot 缓存 store 实例写入该 id；bind 之前写下的 Tab 会在 details inject 运行时刷出。`defineStore.create()` 不会去重，因此 `ui-files` 不得 import 或重建 chat store。
+当前 Tab id 放在会话 chat store（`detailsTab`，持久化键 `dsh.conversation.chat`）。`createChatStore().create()` 在回填时把缺失的 `detailsTab` 写成 `null`，让该字段出现前的快照仍有类型。`ConversationController.openInspector(tab)` 通过 `bindInspector` 暂存的 slot 缓存 store 实例写入该 id；bind 之前写下的 Tab 会在 details inject 运行时刷出。`defineStore.create()` 不会去重，因此 `ui-files` 不得 import 或重建 chat store。
 
 ### 文件 Tab
 
@@ -43,7 +43,7 @@ Web client 已经是三栏：左侧会话导航、中间对话、右侧 `details
 
 `host.listDirectory` 继续只列文件夹，供接纳 workspace 使用。
 
-`host.listEntries({ path })` 是现有 `ctx.fs.listDir` 上的 Host Consumer（`FsDirEntry` 已带 `file`｜`directory`｜`other`）。路径必填。应答携带面包屑、混合行（`kind` + 名称 + 绝对路径 + 可选 size）、隐藏标记和截断。client 绝不自己拼接路径段。不可读或缺失目标以 `directory-unreadable` 失败。该方法不要求 browse 目录选择能力。缺少 `ctx.fs` 以 `internal` 失败。面包屑可下钻，本交付也可上走（browse 对话框已经如此）。
+`host.listEntries({ path })` 是现有 `ctx.fs.listDir` 上的 Host Consumer（`FsDirEntry` 已带 `file`｜`directory`｜`other`）。路径必填且必须完全限定（POSIX 绝对路径，或 Windows 上带盘符／完整 UNC）；相对路径和 Windows 上无盘符的根路径以 `directory-unreadable` 失败，而不是 rebase 到宿主进程。应答携带面包屑、混合行（`kind` + 名称 + 绝对路径 + 可选 size）、隐藏标记和截断。client 绝不自己拼接路径段。不可读或缺失目标以 `directory-unreadable` 失败。该方法不要求 browse 目录选择能力。缺少 `ctx.fs` 以 `internal` 失败。面包屑可下钻，本交付也可上走（browse 对话框已经如此）。
 
 ### 包
 

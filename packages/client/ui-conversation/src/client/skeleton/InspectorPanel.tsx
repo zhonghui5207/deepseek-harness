@@ -30,7 +30,7 @@ export function InspectorPanel({
 }: InspectorPanelProps) {
   useSyncExternalStore(tabs.subscribe, tabs.version)
   const list = tabs.list()
-  const selectedId = useStore(s => s.detailsTab ?? null)
+  const selectedId = useStore(s => s.detailsTab)
   const active = resolveActiveTab(list, selectedId)
 
   return (

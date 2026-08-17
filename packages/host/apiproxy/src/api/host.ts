@@ -109,7 +109,10 @@ export interface HostApi {
 
   /**
    * List one directory level with files and directories for the session
-   * Files inspector. Path is required (the Files tab always has a cwd).
+   * Files inspector. Path is required and must be fully qualified
+   * (POSIX-absolute, or on Windows a drive-qualified or complete UNC form);
+   * relative and rooted drive-less Windows forms fail with
+   * `directory-unreadable` instead of rebasing under the host process.
    * Independent of the directory-picker capability; unreadable or missing
    * targets fail with `directory-unreadable`. The carrier's request signal
    * follows the caller, stopping the filesystem scan on disconnect or timeout.

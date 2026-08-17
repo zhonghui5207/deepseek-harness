@@ -60,7 +60,7 @@ function mount(overrides: {
     currentAddress: undefined,
   })
   const workspaces = createSnapshotStore<WorkspaceListState>({
-    items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+    items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
     baselinesReady: true, recentWorkspaceId: undefined,
   })
   const description = { version: 't', cwd: '/proj', attachedSessions: 1, canOpenPath: overrides.canOpenPath ?? true }

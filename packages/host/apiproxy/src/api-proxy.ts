@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, dirname } from 'node:path'
+import { basename, dirname, posix, win32 } from 'node:path'
 import { FsError } from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-fs'
 import type { Context } from '@deepseek-ai/cordis'
@@ -680,6 +680,23 @@ export interface ApiProxyDefaults {
 
 /** Complete-result bound for `host.listEntries` when the gateway leaves the field unset. */
 export const DEFAULT_LIST_ENTRIES_MAX_ENTRIES = 1000
+
+/**
+ * True when the path names one fixed filesystem location regardless of
+ * process state: POSIX-absolute on POSIX; on Windows only drive-qualified
+ * (`C:\…`) or complete UNC (`\\server\share…`) forms. Rooted drive-less
+ * forms (`\foo`, `/foo`) and incomplete UNC prefixes (`\\`, `\\server`)
+ * pass `isAbsolute` yet still resolve against the process's current drive.
+ * Copied locally so `host.listEntries` does not depend on the browse picker.
+ * @param path - candidate path.
+ * @param platform - replaces `process.platform` for deterministic tests.
+ * @returns whether the path is fully qualified on the platform.
+ */
+export function fullyQualified(path: string, platform: NodeJS.Platform = process.platform): boolean {
+  return platform === 'win32'
+    ? win32.isAbsolute(path) && /^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/]+[^\\/]+)/.test(path)
+    : posix.isAbsolute(path)
+}
 
 /**
  * Ancestor chain from the filesystem root to `target` inclusive — every crumb
@@ -3052,6 +3069,15 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             code: 'internal',
             message: 'host.listEntries requires the filesystem service',
             details: {},
+          })
+        }
+        // Same fully-qualified fence as browse listDirectory: never rebase a
+        // relative or drive-less Windows form under the host process cwd.
+        if (!fullyQualified(request.payload.path)) {
+          return err(request, {
+            code: 'directory-unreadable',
+            message: `cannot list "${request.payload.path}": not a fully qualified path`,
+            details: { path: request.payload.path },
           })
         }
         try {

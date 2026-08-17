@@ -83,4 +83,14 @@ describe('createChatStore', () => {
     const c = createChatStore().create()
     expect(c.store.getSnapshot().draft).toBe('')
   })
+
+  it('backfills detailsTab when a pre-inspector snapshot rehydrates', () => {
+    localStorage.setItem(`${KEY}.old`, JSON.stringify({
+      selection: null, draft: 'kept', view: null, inspect: null,
+    }))
+    const store = createChatStore().create('old')
+    expect(store.store.getSnapshot()).toEqual({
+      selection: null, draft: 'kept', view: null, inspect: null, detailsTab: null,
+    })
+  })
 })
