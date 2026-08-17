@@ -143,8 +143,8 @@ function record(path: string, sessionIds: string[], createdAt = '2026-07-24T00:0
  * Media written before archivedSessionIds existed omit the field; keeping the
  * fixtures in that shape continuously proves the schema default upgrades them.
  */
-type StoredDomainState = Omit<WorkspaceDomainState, 'archivedSessionIds'>
-  & Partial<Pick<WorkspaceDomainState, 'archivedSessionIds'>>
+type StoredDomainState = Omit<WorkspaceDomainState, 'archivedSessionIds' | 'pinnedSessionIds'>
+  & Partial<Pick<WorkspaceDomainState, 'archivedSessionIds' | 'pinnedSessionIds'>>
 
 function storedPool(
   entries: Array<[string, WorkspaceRecord]>,
@@ -196,7 +196,7 @@ describe('WorkspaceRegistry lifecycle and bootstrap', () => {
     await fiber.await()
     expect(ctx.workspaceRegistry.list()).toEqual([])
     expect(list).toHaveBeenCalledTimes(1)
-    expect(storedState(pool)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [] })
+    expect(storedState(pool)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [], pinnedSessionIds: [] })
   })
 
   it('bootstraps once from list headers only, in workspace/session createdAt order', async () => {
@@ -230,6 +230,7 @@ describe('WorkspaceRegistry lifecycle and bootstrap', () => {
       initialized: true,
       workspaceIds: result.registry.list().map(workspace => workspace.id),
       archivedSessionIds: [],
+      pinnedSessionIds: [],
     })
   })
 
@@ -258,7 +259,7 @@ describe('WorkspaceRegistry lifecycle and bootstrap', () => {
     const second = await harness({ pool, sessions: [header('late', late, 100)] })
     expect(second.list).not.toHaveBeenCalled()
     expect(second.registry.list()).toEqual([])
-    expect(storedState(pool)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [] })
+    expect(storedState(pool)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [], pinnedSessionIds: [] })
   })
 
   it('reuses partial records after a bootstrap record write fails', async () => {
@@ -486,7 +487,7 @@ describe('WorkspaceRegistry create and lookup', () => {
     await expect(result.registry.delete(workspace.id)).resolves.toBe(false)
     expect(result.registry.get(workspace.id)).toBeUndefined()
     expect(result.registry.list()).toEqual([])
-    expect(storedState(result.pool)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [] })
+    expect(storedState(result.pool)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [], pinnedSessionIds: [] })
     expect(result.pool.media.get('workspace')!.tables.get('workspaces')!.has(workspace.id)).toBe(false)
     await expect(realpath(dir)).resolves.toBe(dir)
     expect(result.list).toHaveBeenCalledTimes(1)
@@ -530,6 +531,7 @@ describe('WorkspaceRegistry create and lookup', () => {
       initialized: true,
       workspaceIds: [],
       archivedSessionIds: [],
+      pinnedSessionIds: [],
       pendingMutation: { operation: 'delete', workspaceId: workspace.id },
     })
     const reregistered = await first.registry.create(dir)
@@ -538,6 +540,7 @@ describe('WorkspaceRegistry create and lookup', () => {
       initialized: true,
       workspaceIds: [reregistered.id],
       archivedSessionIds: [],
+      pinnedSessionIds: [],
     })
     await first.fiber.dispose()
 
@@ -817,7 +820,7 @@ describe('header-validated membership projection', () => {
     const createRecovery = await harness({ pool: interruptedCreate })
     expect(createRecovery.registry.list()).toEqual([])
     expect(interruptedCreate.media.get('workspace')!.tables.get('workspaces')!.has(createId)).toBe(false)
-    expect(storedState(interruptedCreate)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [] })
+    expect(storedState(interruptedCreate)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [], pinnedSessionIds: [] })
 
     const interruptedDelete = storedPool(
       [[deleteId, record(deleteDir, [])]],
@@ -830,7 +833,7 @@ describe('header-validated membership projection', () => {
     const deleteRecovery = await harness({ pool: interruptedDelete })
     expect(deleteRecovery.registry.list()).toEqual([])
     expect(interruptedDelete.media.get('workspace')!.tables.get('workspaces')!.has(deleteId)).toBe(false)
-    expect(storedState(interruptedDelete)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [] })
+    expect(storedState(interruptedDelete)).toEqual({ initialized: true, workspaceIds: [], archivedSessionIds: [], pinnedSessionIds: [] })
 
     const corruptPending = storedPool(
       [[deleteId, record(deleteDir, [])]],
@@ -940,5 +943,84 @@ describe('registry-global session archive', () => {
     )
     const upgraded = await harness({ pool: legacy })
     expect(upgraded.registry.archivedSessionIds).toEqual([])
+    expect(upgraded.registry.pinnedSessionIds).toEqual([])
+  })
+})
+
+describe('registry-global session pin', () => {
+  it('prepends new pins, skips repeats, and leaves accounting untouched', async () => {
+    const dir = await makeDir('pin-home')
+    const result = await harness({ sessions: [header('kept', dir, 100), header('front', dir, 200)] })
+    const workspace = result.registry.list()[0]!
+    expect(result.registry.pinnedSessionIds).toEqual([])
+
+    await result.registry.pinSession(SessionId('kept'))
+    expect(result.registry.pinnedSessionIds).toEqual(['kept'])
+    expect(workspace.sessionIds).toContain('kept')
+    expect(storedState(result.pool).pinnedSessionIds).toEqual(['kept'])
+    const changesAfterFirst = result.changes.filter(change => change.table === '').length
+
+    await result.registry.pinSession(SessionId('kept'))
+    expect(result.registry.pinnedSessionIds).toEqual(['kept'])
+    expect(result.changes.filter(change => change.table === '').length).toBe(changesAfterFirst)
+
+    await result.registry.pinSession(SessionId('front'))
+    expect(result.registry.pinnedSessionIds).toEqual(['front', 'kept'])
+  })
+
+  it('unpins without requiring the session to still exist, and skips unknown unpins', async () => {
+    const dir = await makeDir('pin-unpin')
+    const result = await harness({ sessions: [header('kept', dir, 100)] })
+    await result.registry.pinSession(SessionId('kept'))
+    await result.registry.unpinSession(SessionId('kept'))
+    expect(result.registry.pinnedSessionIds).toEqual([])
+    await result.registry.unpinSession(SessionId('ghost'))
+    expect(storedState(result.pool).pinnedSessionIds).toEqual([])
+  })
+
+  it('drops a pin when that session is archived', async () => {
+    const dir = await makeDir('pin-archive')
+    const result = await harness({ sessions: [header('kept', dir, 100), header('front', dir, 200)] })
+    await result.registry.pinSession(SessionId('kept'))
+    await result.registry.pinSession(SessionId('front'))
+    await result.registry.archiveSession(SessionId('front'))
+    expect(result.registry.pinnedSessionIds).toEqual(['kept'])
+    expect(result.registry.archivedSessionIds).toEqual(['front'])
+  })
+
+  it('accepts unaccounted and live sessions but rejects unknown ids without writing', async () => {
+    const dir = await makeDir('pin-strays')
+    const live = await makeDir('pin-live')
+    const result = await harness({
+      sessions: [header('stray', dir, 100)],
+      liveSessions: [header('live-only', live, 200)],
+    })
+    await result.registry.pinSession(SessionId('stray'))
+    await result.registry.pinSession(SessionId('live-only'))
+    expect(result.registry.pinnedSessionIds).toEqual(['live-only', 'stray'])
+
+    await expect(result.registry.pinSession(SessionId('ghost')))
+      .rejects.toThrow(/cannot pin session 'ghost'/)
+    expect(storedState(result.pool).pinnedSessionIds).toEqual(['live-only', 'stray'])
+  })
+
+  it('restores the pin order across restarts and defaults it for pre-field media', async () => {
+    const dir = await makeDir('pin-restart')
+    const pool = new MemoryMediaPool()
+    const first = await harness({ pool, sessions: [header('s1', dir, 100)] })
+    await first.registry.pinSession(SessionId('s1'))
+    await first.fiber.dispose()
+
+    const second = await harness({ pool, sessions: [header('s1', dir, 100)] })
+    expect(second.registry.pinnedSessionIds).toEqual(['s1'])
+    await second.fiber.dispose()
+
+    const legacyId = WorkspaceId('00000000-0000-4000-8000-00000000000b')
+    const legacy = storedPool(
+      [[legacyId, record(dir, [])]],
+      { initialized: true, workspaceIds: [legacyId] },
+    )
+    const upgraded = await harness({ pool: legacy })
+    expect(upgraded.registry.pinnedSessionIds).toEqual([])
   })
 })

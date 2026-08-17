@@ -567,4 +567,42 @@ describe('Host Workspace increments', () => {
     })
     abort.abort()
   })
+
+  it('pins a session to the global order, streams the order once, and unpins it', async () => {
+    const { api, root } = await harness()
+    const workspace = expectOk(await api.workspace.create(request({ path: stageDir(root, 'pin-home') }))).workspace
+    const sessionId = SessionId('session-to-pin')
+    expectOk(await api.sessions.create(request({ workspaceId: workspace.workspaceId, sessionId })))
+    expect(expectOk(await api.workspace.list(request({}))).pinnedSessionIds).toEqual([])
+
+    const abort = new AbortController()
+    const stream: AsyncIterator<RpcRequest<HostFrame>> =
+      api.events.host(request({}), abort.signal)[Symbol.asyncIterator]()
+    const changed = nextHostFrame(stream)
+    expect(expectOk(await api.workspace.pinSession(request({ sessionId }))).pinnedSessionIds)
+      .toEqual([sessionId])
+    expect(await changed).toMatchObject({
+      payload: { type: 'host/pinned-sessions-changed', pinnedSessionIds: [sessionId] },
+    })
+
+    const listed = expectOk(await api.workspace.list(request({})))
+    expect(listed.pinnedSessionIds).toEqual([sessionId])
+    expect(listed.items[0]?.sessionIds).toEqual([sessionId])
+
+    const after = nextHostFrame(stream)
+    expect(expectOk(await api.workspace.pinSession(request({ sessionId }))).pinnedSessionIds)
+      .toEqual([sessionId])
+    expect(expectOk(await api.workspace.unpinSession(request({ sessionId }))).pinnedSessionIds)
+      .toEqual([])
+    expect(await after).toMatchObject({
+      payload: { type: 'host/pinned-sessions-changed', pinnedSessionIds: [] },
+    })
+
+    const missing = await api.workspace.pinSession(request({ sessionId: SessionId('session-ghost') }))
+    expect(missing.result).toMatchObject({
+      ok: false,
+      error: { code: 'session-not-found', details: { sessionId: 'session-ghost' } },
+    })
+    abort.abort()
+  })
 })

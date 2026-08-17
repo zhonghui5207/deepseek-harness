@@ -50,6 +50,7 @@ Search is a header action while collapsed and expands across the title and trail
 - Last updated performs a complete recency sort on entry, then preserves manual adjustments until a user prompt or steer advances one Session and moves it to the front. Returning to Manual preserves every current position.
 - Opening a Workspace never shows more than five Sessions without an explicit **Show more** gesture, and closing it resets only that transient gesture.
 - The Host Session account retains the manual-order meaning established by [Session List Browsing and Manual Workspace Order](2026-07-25-session-list-browsing-and-manual-order.md).
+- Last updated promotion never lifts an unpinned session above pinned rows; user sticky pin is a separate Host-durable order owned by [Session pin to top](2026-08-15-session-pin-to-top.md).
 
 ## Testing
 

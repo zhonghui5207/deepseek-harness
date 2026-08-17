@@ -55,6 +55,58 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+.pinSection {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  margin: 2px 0 8px;
+  margin-left: -4px;
+  padding-left: 4px;
+}
+
+.pinHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.pinHeader:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.pinHeaderLabel {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.pinHeaderChevron {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.pinArrow {
+  transition: transform 150ms var(--ds-ease-in-out);
+}
+
+.pinArrowOpen {
+  transform: rotate(90deg);
+}
+
+.pinSection [role='treeitem'] + [role='treeitem'] {
+  margin-top: 2px;
+}
+
 .root:not(.rail) .sectionHeader {
   margin-top: 2px;
   margin-right: -4px;
@@ -500,7 +552,8 @@
   .sectionLabel,
   .searchSlot,
   .searchInput,
-  .headerActions {
+  .headerActions,
+  .pinArrow {
     transition: none;
   }
 }

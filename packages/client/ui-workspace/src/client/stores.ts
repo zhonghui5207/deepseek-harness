@@ -25,6 +25,8 @@ type WorkspaceViewState = {
   sessionOrderByAccount: Record<string, string[]>
   /** Last observed update timestamps per order account for one-time promotion events. */
   sessionUpdatedAtByAccount: Record<string, Record<string, number>>
+  /** Whether the sidebar pin section is expanded (hidden while empty). */
+  pinSectionExpanded: boolean
 }
 
 /**
@@ -43,6 +45,7 @@ type WorkspaceViewActions = {
     updatedAt: Record<string, number>,
   ) => void
   setSessionOrder: (draft: WorkspaceViewState, accountKey: string, order: string[]) => void
+  setPinSectionExpanded: (draft: WorkspaceViewState, expanded: boolean) => void
 }
 
 /**
@@ -50,19 +53,21 @@ type WorkspaceViewActions = {
  * @returns the store handle (spec + type + identity + factory in one).
  */
 export function createWorkspaceViewStore(): EngineStoreHandle<WorkspaceViewState, WorkspaceViewActions> {
-  return defineStore({
+  const handle = defineStore({
     init: (): WorkspaceViewState => ({
       groupBy: 'workspace',
       orderBy: 'updated',
       groupExpansion: {},
       sessionOrderByAccount: {},
       sessionUpdatedAtByAccount: {},
+      pinSectionExpanded: true,
     }),
     persist: 'dsh.workspace.view.v5',
     actions: {
       setGroupBy: (d, mode: SessionGroupBy) => { d.groupBy = mode },
       setOrderBy: (d, mode: SessionOrderBy) => { d.orderBy = mode },
       setGroupExpanded: (d, key: string, expanded: boolean) => { d.groupExpansion[key] = expanded },
+      setPinSectionExpanded: (d, expanded: boolean) => { d.pinSectionExpanded = expanded },
       retainAccountKeys: (d, workspaceKeys: readonly string[]) => {
         const retained = new Set(workspaceKeys)
         d.groupExpansion = Object.fromEntries(
@@ -84,4 +89,14 @@ export function createWorkspaceViewStore(): EngineStoreHandle<WorkspaceViewState
       },
     },
   })
+  return {
+    ...handle,
+    create(scopeKey?: string) {
+      const instance = handle.create(scopeKey)
+      if (!Object.hasOwn(instance.getSnapshot(), 'pinSectionExpanded')) {
+        instance.actions.setPinSectionExpanded(true)
+      }
+      return instance
+    },
+  }
 }

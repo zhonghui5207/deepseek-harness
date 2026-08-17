@@ -54,6 +54,7 @@ ui-sidebar shrinks to the column-geometry shell: brand row, fold state machine, 
 - The two-fact shell/region contract funnels every future workspace-domain feature (Delete confirmation, cross-group moves, Ungrouped adoption) into the single ui-workspace package; ui-sidebar no longer evolves with session-list features.
 - Flat mode supports neither reordering nor a create-in-workspace entry point (switching back to grouped view is required) — an accepted scope reduction.
 - Wiring session Delete and growing the wire status enum remain future iterations.
+- User sticky pin is a separate registry-global order and does not restore activity pinning of the Host account; [Session pin to top](2026-08-15-session-pin-to-top.md) owns it.
 
 ## Testing
 

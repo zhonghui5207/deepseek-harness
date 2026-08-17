@@ -519,6 +519,70 @@ describe('WorkspaceRuntime', () => {
     await workspaces.refresh()
     expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual([])
   })
+
+  it('pins a session, projects the order from the response, list, and frame, and shields a stale baseline', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const sessions = new SessionRuntime(ctx, api, fakeRemote())
+    const workspaces = new WorkspaceRuntime(ctx, api, sessions)
+    api.onList = () => Promise.resolve(ok({
+      items: [
+        { sessionId: sid('s-open'), updatedAt: 2, running: false, blank: false },
+        { sessionId: sid('s-idle'), updatedAt: 1, running: false, blank: false },
+      ],
+    }) as never)
+    await sessions.refresh()
+
+    await expect(workspaces.pinSession(sid('s-idle'))).resolves.toBeUndefined()
+    expect(api.callsOf('workspace.pinSession')).toEqual([{ sessionId: 's-idle' }])
+    expect(workspaces.list.getSnapshot().pinnedSessionIds).toEqual(['s-idle'])
+
+    api.onWorkspacePinSession = () => Promise.resolve(ok({ pinnedSessionIds: [sid('s-open'), sid('s-idle')] }))
+    await workspaces.pinSession(sid('s-open'))
+    expect(workspaces.list.getSnapshot().pinnedSessionIds).toEqual(['s-open', 's-idle'])
+
+    api.onWorkspacePinSession = () => Promise.resolve(err({
+      code: 'session-not-found', message: 'no session ghost', details: { sessionId: sid('ghost') },
+    }))
+    await expect(workspaces.pinSession(sid('ghost'))).rejects.toThrow(/session-not-found/)
+    expect(workspaces.list.getSnapshot().pinnedSessionIds).toEqual(['s-open', 's-idle'])
+
+    workspaces.handleHostEnvelope({
+      rpcId: 'frame' as never,
+      payload: { type: 'host/pinned-sessions-changed', pinnedSessionIds: [sid('s-idle')] },
+    } as never)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(workspaces.list.getSnapshot().pinnedSessionIds).toEqual(['s-idle'])
+    api.onWorkspaceList = () => Promise.resolve(ok({ items: [], pinnedSessionIds: [sid('s-open')] }) as never)
+    await workspaces.refresh()
+    expect(workspaces.list.getSnapshot().pinnedSessionIds).toEqual(['s-open'])
+
+    await workspaces.unpinSession(sid('s-open'))
+    expect(api.callsOf('workspace.unpinSession')).toEqual([{ sessionId: 's-open' }])
+    expect(workspaces.list.getSnapshot().pinnedSessionIds).toEqual([])
+  })
+
+  it('shields the pin order from a stale in-flight baseline', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const sessions = new SessionRuntime(ctx, api, fakeRemote())
+    const workspaces = new WorkspaceRuntime(ctx, api, sessions)
+
+    const gate = deferred<Awaited<ReturnType<FakeApiClient['onWorkspaceList']>>>()
+    api.onWorkspaceList = () => gate.promise
+    const hydration = workspaces.refresh()
+    workspaces.handleHostEnvelope({
+      rpcId: 'frame' as never,
+      payload: { type: 'host/pinned-sessions-changed', pinnedSessionIds: [sid('s-open')] },
+    } as never)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    gate.resolve(ok({ items: [], pinnedSessionIds: [] }))
+    await hydration
+    expect(workspaces.list.getSnapshot().pinnedSessionIds).toEqual(['s-open'])
+    api.onWorkspaceList = () => Promise.resolve(ok({ items: [], pinnedSessionIds: [] }) as never)
+    await workspaces.refresh()
+    expect(workspaces.list.getSnapshot().pinnedSessionIds).toEqual([])
+  })
 })
 
 describe('startInitialSelection', () => {

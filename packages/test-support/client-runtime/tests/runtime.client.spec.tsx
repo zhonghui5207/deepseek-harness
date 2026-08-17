@@ -585,8 +585,12 @@ describe('workspaces action face', () => {
     // state's archive set (features render against the same snapshot).
     await ws.archiveSession('s1' as SessionId)
     expect(ws.list.getSnapshot().archivedSessionIds).toEqual(['s1'])
+    await ws.pinSession('s1' as SessionId)
+    expect(ws.list.getSnapshot().pinnedSessionIds).toEqual(['s1'])
+    await ws.unpinSession('s1' as SessionId)
+    expect(ws.list.getSnapshot().pinnedSessionIds).toEqual([])
     expect(ws.calls.map(c => c.method)).toEqual(
-      ['create', 'create', 'pickDirectory', 'rename', 'delete', 'openPath', 'insertBefore', 'insertSessionBefore', 'archiveSession'])
+      ['create', 'create', 'pickDirectory', 'rename', 'delete', 'openPath', 'insertBefore', 'insertSessionBefore', 'archiveSession', 'pinSession', 'unpinSession'])
 
     ws.stub('create', () => Promise.resolve({ workspaceId: 'ws-x', title: 'X', path: '/x', sessionIds: [] } as never))
     ws.stub('pickDirectory', () => Promise.resolve('/picked'))
@@ -597,6 +601,8 @@ describe('workspaces action face', () => {
     ws.stub('insertBefore', insertBefore)
     ws.stub('insertSessionBefore', () => Promise.resolve({ workspaceId: 'w1', title: '', path: '', sessionIds: [] } as never))
     ws.stub('archiveSession', () => Promise.resolve())
+    ws.stub('pinSession', () => Promise.resolve())
+    ws.stub('unpinSession', () => Promise.resolve())
     expect((await ws.create({ path: '/y' })).title).toBe('X')
     await expect(ws.pickDirectory()).resolves.toBe('/picked')
     expect((await ws.rename('w1' as WorkspaceId, 'z')).title).toBe('S')
@@ -608,6 +614,9 @@ describe('workspaces action face', () => {
     // The stub replaces the default set mutation: the set stays as-is.
     await ws.archiveSession('s2' as SessionId)
     expect(ws.list.getSnapshot().archivedSessionIds).toEqual(['s1'])
+    await ws.pinSession('s2' as SessionId)
+    expect(ws.list.getSnapshot().pinnedSessionIds).toEqual([])
+    await ws.unpinSession('s2' as SessionId)
     await runtime.dispose()
   })
 })

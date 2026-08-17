@@ -182,9 +182,13 @@ export class FakeApiClient implements IApiClient {
     openPath: (payload: unknown) => this.record('host.openPath', payload, this.onOpenPath(payload)),
   }
 
-  // The archive-set field defaults at the binding below so list stubs keep
-  // the pre-archive `{ items }` shape; a stub carrying the field wins.
-  onWorkspaceList: (payload: unknown) => Promise<RpcResponse<{ items: never[]; archivedSessionIds?: never[] }>> =
+  // Archive-set and pin-order fields default at the binding below so list
+  // stubs keep the pre-field `{ items }` shape; a stub carrying either wins.
+  onWorkspaceList: (payload: unknown) => Promise<RpcResponse<{
+    items: never[]
+    archivedSessionIds?: never[]
+    pinnedSessionIds?: never[]
+  }>> =
     () => Promise.resolve(ok({ items: [] }))
   onWorkspaceCreate: (payload: unknown) => Promise<RpcResponse<{ workspace: WorkspaceView; created: boolean }>> =
     () => Promise.resolve(ok({ workspace: fakeWorkspace('fk-ws'), created: true }))
@@ -204,10 +208,20 @@ export class FakeApiClient implements IApiClient {
   onWorkspaceArchiveSession: (payload: unknown) => Promise<RpcResponse<{ archivedSessionIds: SessionId[] }>> =
     payload => Promise.resolve(ok({ archivedSessionIds: [(payload as { sessionId: SessionId }).sessionId] }))
 
+  onWorkspacePinSession: (payload: unknown) => Promise<RpcResponse<{ pinnedSessionIds: SessionId[] }>> =
+    payload => Promise.resolve(ok({ pinnedSessionIds: [(payload as { sessionId: SessionId }).sessionId] }))
+
+  onWorkspaceUnpinSession: (payload: unknown) => Promise<RpcResponse<{ pinnedSessionIds: SessionId[] }>> =
+    () => Promise.resolve(ok({ pinnedSessionIds: [] }))
+
   readonly workspace: IApiClient['workspace'] = {
     list: (payload: unknown) => this.record('workspace.list', payload, this.onWorkspaceList(payload).then(response => (
       response.result.ok
-        ? { ...response, result: { ok: true as const, value: { archivedSessionIds: [] as never[], ...response.result.value } } }
+        ? { ...response, result: { ok: true as const, value: {
+          archivedSessionIds: [] as never[],
+          pinnedSessionIds: [] as never[],
+          ...response.result.value,
+        } } }
         : response
     )) as ReturnType<IApiClient['workspace']['list']>),
     create: (payload: unknown) => this.record('workspace.create', payload, this.onWorkspaceCreate(payload)),
@@ -219,6 +233,10 @@ export class FakeApiClient implements IApiClient {
       this.record('workspace.insertSessionBefore', payload, this.onWorkspaceInsertSessionBefore(payload)),
     archiveSession: (payload: unknown) =>
       this.record('workspace.archiveSession', payload, this.onWorkspaceArchiveSession(payload)),
+    pinSession: (payload: unknown) =>
+      this.record('workspace.pinSession', payload, this.onWorkspacePinSession(payload)),
+    unpinSession: (payload: unknown) =>
+      this.record('workspace.unpinSession', payload, this.onWorkspaceUnpinSession(payload)),
   }
 
   // Payloads stay `unknown` (lint-lane note above); response rows are the real

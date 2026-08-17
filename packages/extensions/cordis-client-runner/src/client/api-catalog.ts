@@ -363,6 +363,16 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Archive a session into the registry-global set (hidden from grouping surfaces; session log and accounting slot remain). Archiving the current session clears the selection into the New Session view state.',
         parameters: [{ name: 'sessionId', description: 'session to archive.' }],
       },
+      {
+        signature: 'pinSession(sessionId: SessionId): Promise<void>',
+        description: 'Prepend a session to the registry-global pin order (grouping surfaces render pinned sessions first). An already pinned id is a no-op.',
+        parameters: [{ name: 'sessionId', description: 'session to pin.' }],
+      },
+      {
+        signature: 'unpinSession(sessionId: SessionId): Promise<void>',
+        description: 'Remove a session from the registry-global pin order. An unpinned id is a no-op.',
+        parameters: [{ name: 'sessionId', description: 'session to unpin.' }],
+      },
     ],
   },
 ]
