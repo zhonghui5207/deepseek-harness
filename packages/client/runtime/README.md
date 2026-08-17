@@ -26,7 +26,7 @@ Workspace and Session lists have independent monotone `pending` → `ready` base
 
 `WorkspaceListState.pinnedSessionIds` mirrors the Host's registry-global pin order (newest pin first). It is the same full-snapshot posture: the `workspace.list` baseline, the `pinSession`/`unpinSession` unary echo, and the `host/pinned-sessions-changed` frame each install the complete order. A frame or echo landing while a `workspace.list` request is in flight also supersedes that stale baseline's order. The workspace browser extracts those ids into one sidebar Pinned section and omits them from workspace groups and the flat list.
 
-SlotRegistry gives the renderer separate bare observables for `useSessions` and `useWorkspaces`; web-react creates the hooks. Workspace business state does not enter `SessionListState` or an entry store.
+SlotRegistry gives the renderer separate bare observables for `useSessions` and `useWorkspaces`; web-react creates the hooks. Workspace business state does not enter `SessionListState` or an entry store. `IWorkspaces.listEntries(path)` lists one mixed directory level through `host.listEntries` (files and directories) and is independent of the browse picker; `listDirectory` remains folders-only. Unreadable or missing targets throw `DirectoryBrowseError` with `directory-unreadable`.
 
 `indexSubagentDescendants()` derives per-parent total and running descendant counts from the retained list mirror. It follows only uninterrupted `origin: 'subagent'` ancestry, so an ordinary fork starts a separate ownership subtree; cycles stop without throwing, and a missing parent remains a harmless key until its summary arrives.
 

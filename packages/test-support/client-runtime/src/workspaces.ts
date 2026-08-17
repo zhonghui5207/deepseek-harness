@@ -1,7 +1,7 @@
 /** Test-owned workspaces face: the renderer standard-kit observable plus recorded actions. */
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
-  DirectoryListing, IWorkspaces, SessionId, SnapshotStore, WorkspaceId, WorkspaceListState, WorkspaceView,
+  DirectoryListing, IWorkspaces, PathListing, SessionId, SnapshotStore, WorkspaceId, WorkspaceListState, WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import { workspaceListState } from './fixtures.ts'
 import type { Stabilizer } from './fixtures.ts'
@@ -126,6 +126,29 @@ export class TestWorkspaces implements IWorkspaces {
     // driven by this double.
     return {
       path: '/home/test',
+      home: '/home/test',
+      crumbs: [
+        { name: '/', path: '/', hidden: false },
+        { name: 'home', path: '/home', hidden: false },
+        { name: 'test', path: '/home/test', hidden: false },
+      ],
+      entries: [],
+      truncated: false,
+    }
+  }
+
+  /**
+   * Mixed listing (recorded). The default serves an empty home level; stub
+   * to shape files and directories.
+   * @param path - absolute directory to list.
+   * @returns the level's listing.
+   */
+  async listEntries(path: string, signal?: AbortSignal): Promise<PathListing> {
+    this.calls.push({ method: 'listEntries', args: [path, signal] })
+    const stub = this.stubs.get('listEntries')
+    if (stub !== undefined) return await (stub(path, signal) as Promise<PathListing>)
+    return {
+      path,
       home: '/home/test',
       crumbs: [
         { name: '/', path: '/', hidden: false },

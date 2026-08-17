@@ -5,7 +5,10 @@
 
 import { randomUUID } from 'node:crypto'
 import { mkdir, stat } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { homedir } from 'node:os'
+import { basename, dirname, posix, win32 } from 'node:path'
+import { FsError } from '@deepseek-ai/dsh-fs'
+import type {} from '@deepseek-ai/dsh-fs'
 import type { Context } from '@deepseek-ai/cordis'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatus } from '@deepseek-ai/dsh-agent'
@@ -36,7 +39,7 @@ import {
 import type { PresetBearingSession } from '@deepseek-ai/dsh-agent-presets'
 import type {} from '@deepseek-ai/dsh-tools'
 import type {
-  ApiProxy, ConfigurableProviderView, CredentialView, GoalRef, HistoryEntry, HostFrame,
+  ApiProxy, ConfigurableProviderView, CredentialView, DirectoryEntry, GoalRef, HistoryEntry, HostFrame,
   ModelCatalogFailure, ModelProviderGroup,
   ModelReasoning, MuxFrame, PromptContentPart, QuestionResponsePayload, SessionListMetadata, SessionProjectionsBlock, SessionSearchItem,
   QueuedInboxItem, SessionSummary, SettingsNamespaceView, SubagentAddress, JobView, ToolEventView,
@@ -667,6 +670,50 @@ export interface ApiProxyDefaults {
    * falls back to platform detection ({@link canOpenNativePath}).
    */
   canOpenPath?: () => boolean
+  /**
+   * Maximum child rows `host.listEntries` returns for one level. The
+   * name-sorted tail past this bound is omitted and `truncated` is true.
+   * @default 1000
+   */
+  listEntriesMaxEntries?: number
+}
+
+/** Complete-result bound for `host.listEntries` when the gateway leaves the field unset. */
+export const DEFAULT_LIST_ENTRIES_MAX_ENTRIES = 1000
+
+/**
+ * True when the path names one fixed filesystem location regardless of
+ * process state: POSIX-absolute on POSIX; on Windows only drive-qualified
+ * (`C:\…`) or complete UNC (`\\server\share…`) forms. Rooted drive-less
+ * forms (`\foo`, `/foo`) and incomplete UNC prefixes (`\\`, `\\server`)
+ * pass `isAbsolute` yet still resolve against the process's current drive.
+ * Copied locally so `host.listEntries` does not depend on the browse picker.
+ * @param path - candidate path.
+ * @param platform - replaces `process.platform` for deterministic tests.
+ * @returns whether the path is fully qualified on the platform.
+ */
+export function fullyQualified(path: string, platform: NodeJS.Platform = process.platform): boolean {
+  return platform === 'win32'
+    ? win32.isAbsolute(path) && /^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/]+[^\\/]+)/.test(path)
+    : posix.isAbsolute(path)
+}
+
+/**
+ * Ancestor chain from the filesystem root to `target` inclusive — every crumb
+ * is a jump target. Copied locally so the Files inspector does not depend on
+ * the browse picker package.
+ * @param target - absolute listed path.
+ * @returns root-to-target crumbs; crumb `hidden` is always false.
+ */
+export function ancestryCrumbs(target: string): DirectoryEntry[] {
+  const crumbs: DirectoryEntry[] = []
+  let current = target
+  for (;;) {
+    const parent = dirname(current)
+    crumbs.unshift({ name: parent === current ? current : basename(current), path: current, hidden: false })
+    if (parent === current) return crumbs
+    current = parent
+  }
 }
 
 /** The tool/call payload fields the presenter path reads. */
@@ -1108,6 +1155,8 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     ?? DEFAULT_SESSION_LOG_COMPRESSION_LEVEL
   const coldBlankProbeMaxBytes = defaults.coldBlankProbeMaxBytes
     ?? DEFAULT_COLD_BLANK_PROBE_MAX_BYTES
+  const listEntriesMaxEntries = defaults.listEntriesMaxEntries
+    ?? DEFAULT_LIST_ENTRIES_MAX_ENTRIES
   /** The seed model each create/resume declares; re-read so it never goes stale. */
   const agentOptions = (): AgentOptions => {
     const { provider, model } = defaults.defaultModelSelection()
@@ -3010,6 +3059,62 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             return err(request, { code: 'cancelled', message: 'directory listing was aborted', details: {} })
           }
           return err(request, directoryError(error))
+        }
+      },
+
+      async listEntries(request, signal) {
+        const fs = ctx.get('fs')
+        if (fs === undefined) {
+          return err(request, {
+            code: 'internal',
+            message: 'host.listEntries requires the filesystem service',
+            details: {},
+          })
+        }
+        // Same fully-qualified fence as browse listDirectory: never rebase a
+        // relative or drive-less Windows form under the host process cwd.
+        if (!fullyQualified(request.payload.path)) {
+          return err(request, {
+            code: 'directory-unreadable',
+            message: `cannot list "${request.payload.path}": not a fully qualified path`,
+            details: { path: request.payload.path },
+          })
+        }
+        try {
+          const target = await fs.resolve(request.payload.path, { signal })
+          const listed = await fs.listDir(target, signal)
+          const truncated = listed.length > listEntriesMaxEntries
+          const shown = truncated ? listed.slice(0, listEntriesMaxEntries) : listed
+          const path = fs.processPath(target)
+          return ok(request, {
+            path,
+            home: homedir(),
+            crumbs: ancestryCrumbs(path),
+            entries: shown.map(entry => ({
+              name: entry.name,
+              path: fs.processPath(entry.target),
+              kind: entry.type,
+              hidden: entry.name.startsWith('.'),
+              ...entry.size === undefined ? {} : { size: entry.size },
+            })),
+            truncated,
+          })
+        } catch (error: unknown) {
+          if (signal.aborted) {
+            return err(request, { code: 'cancelled', message: 'directory listing was aborted', details: {} })
+          }
+          if (error instanceof FsError) {
+            return err(request, {
+              code: 'directory-unreadable',
+              message: error.message,
+              details: { path: request.payload.path },
+            })
+          }
+          return err(request, {
+            code: 'internal',
+            message: error instanceof Error ? error.message : String(error),
+            details: {},
+          })
         }
       },
 

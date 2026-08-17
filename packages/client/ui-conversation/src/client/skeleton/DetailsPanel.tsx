@@ -1,21 +1,21 @@
-// DetailsPanel: close button + the selected call's args and
-// result — args as JSON, the result raw except for a terminal-card call, whose
-// Output section is the command's terminal card. Reads the
-// selection from the shared chat
-// store (conversation writes, this panel reads — the cross-registration
-// share the store seat exists for) and derives the call material from the
-// session snapshot — no data of its own.
+// DetailsPanel: the selected call's args and result — args as JSON, the
+// result raw except for a terminal-card call, whose Output section is the
+// command's terminal card. Reads the selection from the shared chat store
+// (conversation writes, this panel reads — the cross-registration share
+// the store seat exists for) and derives the call material from the
+// session snapshot — no data of its own. The inspector chrome (tabs +
+// close) lives on InspectorPanel.
 
 import { Fragment } from 'react'
 import { CodeBlock } from '@deepseek-ai/dsh-client-ui-primitives'
 import { shallowEqual } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ConversationSnapshot, RunningToolCall, ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-runtime/client'
-import type { DetailsSlotProps } from '../contract/slots.ts'
+import type { DetailsTabSlotProps } from '../contract/slots.ts'
 import { findToolCall } from '../chat/tool-node-reader.ts'
 import css from './DetailsPanel.module.css'
 
-/** Full props composed by reference from the contract (automatic shares & injected share). */
-export type DetailsPanelProps = DetailsSlotProps
+/** Full props composed by reference from the Details tab contract. */
+export type DetailsPanelProps = DetailsTabSlotProps
 
 /**
  * Selected call material: the call's display name and args plus the frozen
@@ -63,7 +63,7 @@ function rawResultText(block: ToolCallBlock): string {
   return parts.join('\n')
 }
 
-export function DetailsPanel({ useSession, useSessions, sessionId, useStore, renderSlot, closeDetails, t }: DetailsPanelProps) {
+export function DetailsPanel({ useSession, useSessions, sessionId, useStore, renderSlot, t }: DetailsPanelProps) {
   const selection = useStore(s => s.selection)
   // Session workspace root: an omitted or relative terminal cwd resolves
   // against it, which the pure presenter cannot see.
@@ -77,18 +77,8 @@ export function DetailsPanel({ useSession, useSessions, sessionId, useStore, ren
 
   return (
     <div className={css.root}>
-      <div className={css.header}>
-        <div className={css.title}>
-          {selection === null ? t('details.title') : material?.name ?? selection.toolName ?? t('details.title')}
-        </div>
-        <button
-          type="button" className={css.close} aria-label={t('details.close')}
-          onClick={() => { closeDetails() }}
-        >
-          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
-            <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </button>
+      <div className={css.title}>
+        {selection === null ? t('details.title') : material?.name ?? selection.toolName ?? t('details.title')}
       </div>
       <div className={css.body}>
         {selection === null || callId === undefined

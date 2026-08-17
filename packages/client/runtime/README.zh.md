@@ -26,7 +26,7 @@ Workspace 和 Session 列表各自具有单调的 `pending` → `ready` 基线�
 
 `WorkspaceListState.pinnedSessionIds` 镜像 Host 的注册表级全局置顶顺序（后置顶的在前）。姿态与归档集合相同：`workspace.list` 基线、`pinSession`/`unpinSession` 一元回声和 `host/pinned-sessions-changed` 帧各自安装完整顺序。在 `workspace.list` 请求进行中落地的帧或回声也会取代该过期基线携带的顺序。workspace 浏览器把这些 id 抽到侧栏的一条置顶区，并从各 workspace 分组和单列表中去掉它们。
 
-SlotRegistry 分别为 renderer 提供 `useSessions` 与 `useWorkspaces` 的裸 observable；web-react 创建钩子。Workspace 业务状态不会进入 `SessionListState` 或条目 store。
+SlotRegistry 分别为 renderer 提供 `useSessions` 与 `useWorkspaces` 的裸 observable；web-react 创建钩子。Workspace 业务状态不会进入 `SessionListState` 或条目 store。`IWorkspaces.listEntries(path)` 通过 `host.listEntries` 列出一层混合目录（文件和目录），且不依赖 browse 选择器；`listDirectory` 仍只列文件夹。不可读或缺失目标抛出带 `directory-unreadable` 的 `DirectoryBrowseError`。
 
 `indexSubagentDescendants()` 从保留的列表镜像中派生每个 parent 的后代总数与运行中后代数。它只沿不间断的 `origin: 'subagent'` 祖先链追踪，因此普通 fork 会开启独立的归属子树；遇到环时，追踪会停止但不会抛出异常，缺失的 parent 则会保留为无害的键，直至其摘要到达。
 

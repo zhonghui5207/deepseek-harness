@@ -62,8 +62,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation': { kind: 'single'; scope: 'session-maybe'; owner: ConvOwnerProps }
     /**
      * The right details column, shown when the layout opens it. OCCUPIED by
-     * ui-conversation's DetailsPanel, which declares the tool-details seat
-     * inside it — registering here replaces the column and takes that seat
+     * ui-conversation's inspector tab shell, which declares `details.tab`
+     * inside it — registering here replaces the column and takes those tabs
      * with it. Absent an occupant the column renders nothing.
      *
      * No owner props: the framework injects the session id and hooks for the

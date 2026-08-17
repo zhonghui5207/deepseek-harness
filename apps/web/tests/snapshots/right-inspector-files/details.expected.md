@@ -1,0 +1,6 @@
+- complementary "Inspector":
+  - tablist "Inspector":
+    - tab "Files"
+    - tab "Details" [selected]
+  - button "Close details"
+  - text: Details Click a tool row in the message flow to view its details

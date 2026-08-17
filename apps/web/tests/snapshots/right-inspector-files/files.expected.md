@@ -1,0 +1,19 @@
+- complementary "Inspector":
+  - tablist "Inspector":
+    - tab "Files" [selected]
+    - tab "Details"
+  - button "Close details"
+  - navigation "Path":
+    - button /
+    - text: /
+    - button "tmp"
+    - text: /
+    - button "{{workspace}}" [disabled]
+  - button "Show hidden files"
+  - list "Workspace files":
+    - listitem:
+      - button "README.md"
+    - listitem:
+      - button "src":
+        - img
+        - text: src

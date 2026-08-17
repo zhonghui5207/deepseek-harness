@@ -112,6 +112,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       owner: AssistantActionOwnerProps
     }
     /**
+     * One tab of the right inspector. The `details` occupant renders the
+     * active entry through `only: <id>`. Entries supply `id`, `label`, and
+     * `order`; this package's Details tab is `details`, and ui-files
+     * contributes `files`.
+     */
+    'details.tab': { kind: 'list'; scope: 'session'; owner: DetailsTabOwnerProps }
+    /**
      * The body of the details panel for the tool call the user selected —
      * one occupant, so taking it means rendering every tool's output, not just
      * the ones you know. The owner passes a frozen `block` whose two lifecycle
@@ -713,17 +720,30 @@ export type ChatViewSlotProps =
   & PropsStore<ChatStore> & ChatViewInjected & PropsLocale<'conversation'>
 
 /**
- * Injected share of the details slot: the panel is otherwise a pure reader of
- * the shared chat store, but its close button is a layout orchestration call.
+ * Injected share of the details column: the tab shell is otherwise a reader
+ * of the shared chat store, but its close button is a layout orchestration call.
  */
 export interface DetailsInjected {
   /** Close the details panel (layout geometry stays with ctx.layout). */
   closeDetails: () => void
+  /** Registered inspector tabs, projected from `details.tab` entries. */
+  tabs: {
+    list: () => ViewTab[]
+    subscribe: (fn: () => void) => () => void
+    version: () => number
+  }
 }
 
-/** Full details-slot props: selection store, Tool output seat, injected close callback, and locale. */
-export type DetailsSlotProps = PropsRuntime<'details'> & PropsRenderSlots<'conversation.details.tool'>
+/** Full details-column props: tab list, selection store, injected close, and locale. */
+export type DetailsSlotProps = PropsRuntime<'details'> & PropsRenderSlots<'details.tab'>
   & PropsStore<ChatStore> & DetailsInjected & PropsLocale<'conversation'>
+
+/** Owner share of one inspector tab; the tab body is self-sufficient. */
+export interface DetailsTabOwnerProps {}
+
+/** Full Details-tab props: selected-call body plus the Tool output seat. */
+export type DetailsTabSlotProps = PropsRuntime<'details.tab'> & PropsRenderSlots<'conversation.details.tool'>
+  & PropsStore<ChatStore> & PropsLocale<'conversation'>
 
 /** Owner share common to the hero / New-Session Workspace pickers. */
 export interface EmptyWorkspaceOwnerProps {

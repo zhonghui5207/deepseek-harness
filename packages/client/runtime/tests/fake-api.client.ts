@@ -127,6 +127,15 @@ export class FakeApiClient implements IApiClient {
   }>> =
     () => Promise.resolve(ok({ path: '/home/fake', home: '/home/fake', crumbs: [{ name: '/', path: '/', hidden: false }], entries: [], truncated: false }))
 
+  onListEntries: (payload: unknown) => Promise<RpcResponse<{
+    path: string
+    home: string
+    crumbs: { name: string; path: string; hidden: boolean }[]
+    entries: { name: string; path: string; kind: 'file' | 'directory' | 'other'; hidden: boolean; size?: number }[]
+    truncated: boolean
+  }>> =
+    () => Promise.resolve(ok({ path: '/home/fake', home: '/home/fake', crumbs: [{ name: '/', path: '/', hidden: false }], entries: [], truncated: false }))
+
   onCreateDirectory: (payload: unknown) => Promise<RpcResponse<{ path: string }>> =
     () => Promise.resolve(ok({ path: '/home/fake/new' }))
 
@@ -178,6 +187,7 @@ export class FakeApiClient implements IApiClient {
     describe: (payload: unknown) => this.record('host.describe', payload, this.onDescribe(payload)),
     pickDirectory: (payload: unknown) => this.record('host.pickDirectory', payload, this.onPickDirectory(payload)),
     listDirectory: (payload: unknown) => this.record('host.listDirectory', payload, this.onListDirectory(payload)),
+    listEntries: (payload: unknown) => this.record('host.listEntries', payload, this.onListEntries(payload)),
     createDirectory: (payload: unknown) => this.record('host.createDirectory', payload, this.onCreateDirectory(payload)),
     openPath: (payload: unknown) => this.record('host.openPath', payload, this.onOpenPath(payload)),
   }
